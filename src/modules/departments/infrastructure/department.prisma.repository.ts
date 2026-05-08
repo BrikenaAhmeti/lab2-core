@@ -8,12 +8,29 @@ import {
 import { DepartmentEntity, DepartmentListResult } from '../domain/department.entity';
 import { Prisma } from '../../../generated/prisma';
 
+function toJsonInput(value: unknown | null | undefined) {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (value === null) {
+        return Prisma.DbNull;
+    }
+
+    return value as Prisma.InputJsonValue;
+}
+
 export class DepartmentPrismaRepository implements DepartmentRepository {
     async create(data: CreateDepartmentData): Promise<DepartmentEntity> {
         return prisma.department.create({
             data: {
                 name: data.name,
                 description: data.description ?? null,
+                floor: data.floor ?? null,
+                phoneExtension: data.phoneExtension ?? null,
+                operatingHours: toJsonInput(data.operatingHours),
+                isActive: data.isActive,
+                sortOrder: data.sortOrder,
             },
         });
     }
@@ -56,16 +73,30 @@ export class DepartmentPrismaRepository implements DepartmentRepository {
                         mode: 'insensitive',
                     },
                 },
+                {
+                    floor: {
+                        contains: filters.search,
+                        mode: 'insensitive',
+                    },
+                },
+                {
+                    phoneExtension: {
+                        contains: filters.search,
+                        mode: 'insensitive',
+                    },
+                },
             ];
         }
 
         const skip = (filters.page - 1) * filters.limit;
+        const orderBy = filters.sortBy
+            ? [{ [filters.sortBy]: filters.sortDirection ?? 'asc' }]
+            : [{ sortOrder: 'asc' as const }, { name: 'asc' as const }];
+
         const [items, total] = await prisma.$transaction([
             prisma.department.findMany({
                 where,
-                orderBy: {
-                    name: 'asc',
-                },
+                orderBy,
                 skip,
                 take: filters.limit,
             }),
@@ -86,7 +117,10 @@ export class DepartmentPrismaRepository implements DepartmentRepository {
     async update(id: string, data: UpdateDepartmentData): Promise<DepartmentEntity> {
         return prisma.department.update({
             where: { id },
-            data,
+            data: {
+                ...data,
+                operatingHours: toJsonInput(data.operatingHours),
+            },
         });
     }
 

@@ -11,6 +11,11 @@ export class CreateDepartmentHandler
         return this.departmentService.createDepartment({
             name: command.name,
             description: command.description,
+            floor: command.floor,
+            phoneExtension: command.phoneExtension,
+            operatingHours: command.operatingHours,
+            isActive: command.isActive,
+            sortOrder: command.sortOrder,
         });
     }
 }

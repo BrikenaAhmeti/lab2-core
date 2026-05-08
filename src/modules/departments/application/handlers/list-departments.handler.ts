@@ -13,6 +13,8 @@ export class ListDepartmentsHandler
             limit: query.limit,
             search: query.search,
             isActive: query.isActive,
+            sortBy: query.sortBy,
+            sortDirection: query.sortDirection,
         });
     }
 }

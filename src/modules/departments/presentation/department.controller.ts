@@ -26,6 +26,15 @@ const createDepartmentSchema = z.object({
         .trim()
         .max(255, 'Description must be at most 255 characters')
         .optional(),
+    floor: z.string().trim().max(50, 'Floor must be at most 50 characters').optional(),
+    phoneExtension: z
+        .string()
+        .trim()
+        .max(30, 'Phone extension must be at most 30 characters')
+        .optional(),
+    operatingHours: z.unknown().optional(),
+    isActive: z.boolean().optional(),
+    sortOrder: z.number().int().optional(),
 });
 
 const departmentIdParamsSchema = z.object({
@@ -42,6 +51,8 @@ const listDepartmentsQuerySchema = z.object({
         if (value === 'false' || value === false) return false;
         return value;
     }, z.boolean().optional()),
+    sortBy: z.enum(['name', 'sortOrder', 'createdAt', 'updatedAt']).optional(),
+    sortDirection: z.enum(['asc', 'desc']).optional(),
 });
 
 const updateDepartmentSchema = z
@@ -58,13 +69,28 @@ const updateDepartmentSchema = z
                 z.null(),
             ])
             .optional(),
+        floor: z
+            .union([z.string().trim().max(50, 'Floor must be at most 50 characters'), z.null()])
+            .optional(),
+        phoneExtension: z
+            .union([
+                z.string().trim().max(30, 'Phone extension must be at most 30 characters'),
+                z.null(),
+            ])
+            .optional(),
+        operatingHours: z.unknown().optional(),
         isActive: z.boolean().optional(),
+        sortOrder: z.number().int().optional(),
     })
     .refine(
         (body) =>
             body.name !== undefined ||
             body.description !== undefined ||
-            body.isActive !== undefined,
+            body.floor !== undefined ||
+            body.phoneExtension !== undefined ||
+            body.operatingHours !== undefined ||
+            body.isActive !== undefined ||
+            body.sortOrder !== undefined,
         {
             message: 'At least one field is required',
         },
@@ -84,7 +110,15 @@ export class DepartmentController {
 
     async create(req: Request, res: Response) {
         const body = createDepartmentSchema.parse(req.body);
-        const command = new CreateDepartmentCommand(body.name, body.description);
+        const command = new CreateDepartmentCommand(
+            body.name,
+            body.description,
+            body.floor,
+            body.phoneExtension,
+            body.operatingHours,
+            body.isActive,
+            body.sortOrder,
+        );
         const result = await this.commandBus.execute(this.createDepartmentHandler, command);
 
         return res.status(201).json(result);
@@ -97,6 +131,8 @@ export class DepartmentController {
             queryData.limit,
             queryData.search,
             queryData.isActive,
+            queryData.sortBy,
+            queryData.sortDirection,
         );
         const result = await this.queryBus.execute(this.listDepartmentsHandler, query);
 
@@ -118,7 +154,11 @@ export class DepartmentController {
             params.id,
             body.name,
             body.description,
+            body.floor,
+            body.phoneExtension,
+            body.operatingHours,
             body.isActive,
+            body.sortOrder,
         );
         const result = await this.commandBus.execute(this.updateDepartmentHandler, command);
 

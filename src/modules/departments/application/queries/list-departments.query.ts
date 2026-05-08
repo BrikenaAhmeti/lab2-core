@@ -6,5 +6,7 @@ export class ListDepartmentsQuery implements Query {
         public readonly limit: number,
         public readonly search?: string,
         public readonly isActive?: boolean,
+        public readonly sortBy?: 'name' | 'sortOrder' | 'createdAt' | 'updatedAt',
+        public readonly sortDirection?: 'asc' | 'desc',
     ) { }
 }

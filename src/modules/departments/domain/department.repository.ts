@@ -3,6 +3,11 @@ import { DepartmentEntity, DepartmentListResult } from './department.entity';
 export interface CreateDepartmentData {
     name: string;
     description?: string | null;
+    floor?: string | null;
+    phoneExtension?: string | null;
+    operatingHours?: unknown | null;
+    isActive?: boolean;
+    sortOrder?: number;
 }
 
 export interface ListDepartmentsFilters {
@@ -10,12 +15,18 @@ export interface ListDepartmentsFilters {
     limit: number;
     search?: string;
     isActive?: boolean;
+    sortBy?: 'name' | 'sortOrder' | 'createdAt' | 'updatedAt';
+    sortDirection?: 'asc' | 'desc';
 }
 
 export interface UpdateDepartmentData {
     name?: string;
     description?: string | null;
+    floor?: string | null;
+    phoneExtension?: string | null;
+    operatingHours?: unknown | null;
     isActive?: boolean;
+    sortOrder?: number;
 }
 
 export interface DepartmentRepository {

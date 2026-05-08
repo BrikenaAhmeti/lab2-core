@@ -4,6 +4,7 @@ import { DepartmentRepository } from '../domain/department.repository';
 import {
     normalizeDepartmentDescription,
     normalizeDepartmentName,
+    normalizeDepartmentOptionalText,
     normalizeDepartmentSearch,
 } from '../domain/department.normalizer';
 
@@ -13,6 +14,11 @@ export class DepartmentService {
     async createDepartment(data: {
         name: string;
         description?: string | null;
+        floor?: string | null;
+        phoneExtension?: string | null;
+        operatingHours?: unknown | null;
+        isActive?: boolean;
+        sortOrder?: number;
     }): Promise<DepartmentEntity> {
         const normalizedName = normalizeDepartmentName(data.name);
 
@@ -26,6 +32,11 @@ export class DepartmentService {
         return this.departmentRepository.create({
             name: normalizedName,
             description: normalizeDepartmentDescription(data.description),
+            floor: normalizeDepartmentOptionalText(data.floor),
+            phoneExtension: normalizeDepartmentOptionalText(data.phoneExtension),
+            operatingHours: data.operatingHours,
+            isActive: data.isActive,
+            sortOrder: data.sortOrder,
         });
     }
 
@@ -44,12 +55,16 @@ export class DepartmentService {
         limit: number;
         search?: string;
         isActive?: boolean;
+        sortBy?: 'name' | 'sortOrder' | 'createdAt' | 'updatedAt';
+        sortDirection?: 'asc' | 'desc';
     }): Promise<DepartmentListResult> {
         return this.departmentRepository.list({
             page: filters.page,
             limit: filters.limit,
             search: normalizeDepartmentSearch(filters.search),
             isActive: filters.isActive,
+            sortBy: filters.sortBy,
+            sortDirection: filters.sortDirection,
         });
     }
 
@@ -58,7 +73,11 @@ export class DepartmentService {
         data: {
             name?: string;
             description?: string | null;
+            floor?: string | null;
+            phoneExtension?: string | null;
+            operatingHours?: unknown | null;
             isActive?: boolean;
+            sortOrder?: number;
         },
     ): Promise<DepartmentEntity> {
         const existingDepartment = await this.departmentRepository.findById(id);
@@ -70,7 +89,11 @@ export class DepartmentService {
         const updateData: {
             name?: string;
             description?: string | null;
+            floor?: string | null;
+            phoneExtension?: string | null;
+            operatingHours?: unknown | null;
             isActive?: boolean;
+            sortOrder?: number;
         } = {};
 
         if (data.name !== undefined) {
@@ -89,8 +112,24 @@ export class DepartmentService {
             updateData.description = normalizeDepartmentDescription(data.description);
         }
 
+        if (data.floor !== undefined) {
+            updateData.floor = normalizeDepartmentOptionalText(data.floor);
+        }
+
+        if (data.phoneExtension !== undefined) {
+            updateData.phoneExtension = normalizeDepartmentOptionalText(data.phoneExtension);
+        }
+
+        if (data.operatingHours !== undefined) {
+            updateData.operatingHours = data.operatingHours;
+        }
+
         if (data.isActive !== undefined) {
             updateData.isActive = data.isActive;
+        }
+
+        if (data.sortOrder !== undefined) {
+            updateData.sortOrder = data.sortOrder;
         }
 
         if (Object.keys(updateData).length === 0) {

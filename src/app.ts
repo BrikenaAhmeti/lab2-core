@@ -6,6 +6,7 @@ import { env } from './config/env';
 import { errorHandler } from './shared/middleware/error-handler';
 import { notFoundHandler } from './shared/middleware/not-found';
 import { departmentRoutes } from './modules/departments/presentation/department.routes';
+import { serviceCatalogRoutes } from './modules/service-catalog/presentation/service-catalog.routes';
 
 export function createApp() {
     const app = express();
@@ -40,6 +41,7 @@ export function createApp() {
     });
 
     app.use('/api/departments', departmentRoutes);
+    app.use('/api/services', serviceCatalogRoutes);
 
     app.use(notFoundHandler);
     app.use(errorHandler);

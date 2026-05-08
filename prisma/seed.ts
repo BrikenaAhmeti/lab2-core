@@ -11,6 +11,16 @@ const PERMISSIONS = [
         scope: 'all',
         description: 'Create, update, and deactivate departments across all scopes',
     },
+    {
+        name: 'services:read',
+        scope: 'all',
+        description: 'Read services across all scopes',
+    },
+    {
+        name: 'services:manage',
+        scope: 'all',
+        description: 'Create, update, and deactivate services across all scopes',
+    },
 ] as const;
 
 async function main() {

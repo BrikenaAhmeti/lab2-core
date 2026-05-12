@@ -78,6 +78,8 @@ Permission checks stay compatible with the auth service and support:
 ## Endpoints
 
 - `GET /health`
+- `GET /api/docs`
+- `GET /api/docs.json`
 - `POST /api/departments`
 - `GET /api/departments`
 - `GET /api/departments/:id`

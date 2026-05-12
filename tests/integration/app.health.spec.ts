@@ -11,4 +11,14 @@ describe('App health route', () => {
         expect(response.status).toBe(200);
         expect(response.body.status).toBe('ok');
     });
+
+    it('should expose the OpenAPI document', async () => {
+        const response = await request(app).get('/api/docs.json');
+
+        expect(response.status).toBe(200);
+        expect(response.body.openapi).toBe('3.0.3');
+        expect(response.body.paths['/health']).toBeDefined();
+        expect(response.body.paths['/api/departments']).toBeDefined();
+        expect(response.body.paths['/api/services']).toBeDefined();
+    });
 });

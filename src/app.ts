@@ -2,12 +2,29 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env';
 import { errorHandler } from './shared/middleware/error-handler';
 import { notFoundHandler } from './shared/middleware/not-found';
 import { departmentRoutes } from './modules/departments/presentation/department.routes';
 import { serviceCatalogRoutes } from './modules/service-catalog/presentation/service-catalog.routes';
+import { swaggerSpec } from './docs/swagger';
 
+/**
+ * @openapi
+ * /health:
+ *   get:
+ *     tags:
+ *       - Health
+ *     summary: Health check
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/HealthResponse'
+ */
 export function createApp() {
     const app = express();
     const allowedOrigins = env.frontendOrigins
@@ -39,6 +56,11 @@ export function createApp() {
     app.get('/health', (_req, res) => {
         res.json({ status: 'ok' });
     });
+
+    app.get('/api/docs.json', (_req, res) => {
+        res.json(swaggerSpec);
+    });
+    app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
     app.use('/api/departments', departmentRoutes);
     app.use('/api/services', serviceCatalogRoutes);

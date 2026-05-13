@@ -24,6 +24,16 @@ const PERMISSIONS = [
         scope: 'all',
         description: 'Create, update, and deactivate services across all scopes',
     },
+    {
+        name: 'staff-types:read',
+        scope: 'all',
+        description: 'Read staff position types across all scopes',
+    },
+    {
+        name: 'staff-types:manage',
+        scope: 'all',
+        description: 'Create, update, and deactivate staff position types across all scopes',
+    },
 ] as const;
 
 const SETTINGS = [

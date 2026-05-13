@@ -8,6 +8,7 @@ import { errorHandler } from './shared/middleware/error-handler';
 import { notFoundHandler } from './shared/middleware/not-found';
 import { departmentRoutes } from './modules/departments/presentation/department.routes';
 import { serviceCatalogRoutes } from './modules/service-catalog/presentation/service-catalog.routes';
+import { staffPositionTypeRoutes } from './modules/staff-position-types/presentation/staff-position-type.routes';
 import { swaggerSpec } from './docs/swagger';
 
 /**
@@ -64,6 +65,7 @@ export function createApp() {
 
     app.use('/api/departments', departmentRoutes);
     app.use('/api/services', serviceCatalogRoutes);
+    app.use('/api/staff-position-types', staffPositionTypeRoutes);
 
     app.use(notFoundHandler);
     app.use(errorHandler);

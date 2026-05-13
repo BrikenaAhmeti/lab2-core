@@ -195,6 +195,108 @@ const options = {
                         sortOrder: { type: 'integer', example: 1 },
                     },
                 },
+                StaffPositionTypeDepartment: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'string', format: 'uuid' },
+                        name: { type: 'string', example: 'Radiology' },
+                        isActive: { type: 'boolean', example: true },
+                    },
+                },
+                StaffPositionType: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'string', format: 'uuid' },
+                        name: { type: 'string', example: 'Radiologic Technologist' },
+                        description: {
+                            type: 'string',
+                            nullable: true,
+                            example: 'Imaging specialist',
+                        },
+                        defaultRoleKey: {
+                            type: 'string',
+                            example: 'lab_technician',
+                        },
+                        defaultRoleName: {
+                            type: 'string',
+                            example: 'Lab Technician',
+                        },
+                        applicableDepartmentIds: {
+                            type: 'array',
+                            nullable: true,
+                            items: {
+                                type: 'string',
+                                format: 'uuid',
+                            },
+                        },
+                        applicableDepartments: {
+                            type: 'array',
+                            items: {
+                                $ref: '#/components/schemas/StaffPositionTypeDepartment',
+                            },
+                        },
+                        isActive: { type: 'boolean', example: true },
+                        createdAt: { type: 'string', format: 'date-time' },
+                        updatedAt: { type: 'string', format: 'date-time' },
+                    },
+                },
+                StaffPositionTypeListResponse: {
+                    type: 'object',
+                    properties: {
+                        items: {
+                            type: 'array',
+                            items: { $ref: '#/components/schemas/StaffPositionType' },
+                        },
+                    },
+                },
+                CreateStaffPositionTypeRequest: {
+                    type: 'object',
+                    required: ['name', 'defaultRoleKey'],
+                    properties: {
+                        name: { type: 'string', example: 'Radiologic Technologist' },
+                        description: {
+                            type: 'string',
+                            example: 'Imaging specialist',
+                        },
+                        defaultRoleKey: {
+                            type: 'string',
+                            example: 'lab_technician',
+                        },
+                        applicableDepartmentIds: {
+                            type: 'array',
+                            nullable: true,
+                            items: {
+                                type: 'string',
+                                format: 'uuid',
+                            },
+                        },
+                        isActive: { type: 'boolean', example: true },
+                    },
+                },
+                UpdateStaffPositionTypeRequest: {
+                    type: 'object',
+                    properties: {
+                        name: { type: 'string', example: 'Optometrist' },
+                        description: {
+                            type: 'string',
+                            nullable: true,
+                            example: 'Eye care specialist',
+                        },
+                        defaultRoleKey: {
+                            type: 'string',
+                            example: 'doctor',
+                        },
+                        applicableDepartmentIds: {
+                            type: 'array',
+                            nullable: true,
+                            items: {
+                                type: 'string',
+                                format: 'uuid',
+                            },
+                        },
+                        isActive: { type: 'boolean', example: true },
+                    },
+                },
             },
         },
     },

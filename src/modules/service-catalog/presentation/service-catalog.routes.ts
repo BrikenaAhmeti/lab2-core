@@ -211,6 +211,19 @@ serviceCatalogRoutes.patch(
     },
 );
 
+serviceCatalogRoutes.put(
+    '/:id',
+    authMiddleware,
+    requirePermission('services:manage', 'all'),
+    async (req, res, next) => {
+        try {
+            await controller.update(req, res);
+        } catch (error) {
+            next(error);
+        }
+    },
+);
+
 /**
  * @openapi
  * /api/services/{id}:

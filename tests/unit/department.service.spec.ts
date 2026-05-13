@@ -18,7 +18,11 @@ describe('DepartmentService', () => {
         id: '8d1dbd2c-b5c4-4d8f-b75b-e8a2dce8f30e',
         name: 'Cardiology',
         description: 'Heart care',
+        floor: null,
+        phoneExtension: null,
+        operatingHours: null,
         isActive: true,
+        sortOrder: 0,
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     };

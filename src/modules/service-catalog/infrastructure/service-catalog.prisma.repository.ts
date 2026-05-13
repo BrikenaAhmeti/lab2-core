@@ -20,12 +20,30 @@ export class ServiceCatalogPrismaRepository implements ServiceCatalogRepository 
                 isActive: data.isActive,
                 sortOrder: data.sortOrder,
             },
+            include: {
+                department: {
+                    select: {
+                        id: true,
+                        name: true,
+                        isActive: true,
+                    },
+                },
+            },
         });
     }
 
     async findById(id: string): Promise<ServiceCatalogEntity | null> {
         return prisma.serviceCatalog.findUnique({
             where: { id },
+            include: {
+                department: {
+                    select: {
+                        id: true,
+                        name: true,
+                        isActive: true,
+                    },
+                },
+            },
         });
     }
 
@@ -36,6 +54,17 @@ export class ServiceCatalogPrismaRepository implements ServiceCatalogRepository 
         });
 
         return Boolean(department);
+    }
+
+    async countActiveAppointmentsByServiceId(id: string): Promise<number> {
+        return prisma.appointment.count({
+            where: {
+                serviceCatalogId: id,
+                status: {
+                    notIn: ['COMPLETED', 'CANCELLED', 'NO_SHOW'],
+                },
+            },
+        });
     }
 
     async list(filters: ListServiceCatalogFilters): Promise<ServiceCatalogListResult> {
@@ -77,6 +106,15 @@ export class ServiceCatalogPrismaRepository implements ServiceCatalogRepository 
                 orderBy,
                 skip,
                 take: filters.limit,
+                include: {
+                    department: {
+                        select: {
+                            id: true,
+                            name: true,
+                            isActive: true,
+                        },
+                    },
+                },
             }),
             prisma.serviceCatalog.count({ where }),
         ]);
@@ -96,6 +134,15 @@ export class ServiceCatalogPrismaRepository implements ServiceCatalogRepository 
         return prisma.serviceCatalog.update({
             where: { id },
             data,
+            include: {
+                department: {
+                    select: {
+                        id: true,
+                        name: true,
+                        isActive: true,
+                    },
+                },
+            },
         });
     }
 
@@ -104,6 +151,15 @@ export class ServiceCatalogPrismaRepository implements ServiceCatalogRepository 
             where: { id },
             data: {
                 isActive: false,
+            },
+            include: {
+                department: {
+                    select: {
+                        id: true,
+                        name: true,
+                        isActive: true,
+                    },
+                },
             },
         });
     }

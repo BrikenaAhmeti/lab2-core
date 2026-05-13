@@ -9,6 +9,11 @@ export interface ServiceCatalogEntity {
     sortOrder: number;
     createdAt: Date;
     updatedAt: Date;
+    department?: {
+        id: string;
+        name: string;
+        isActive: boolean;
+    };
 }
 
 export interface ServiceCatalogListResult {

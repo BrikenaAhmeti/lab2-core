@@ -146,6 +146,12 @@ export class ServiceCatalogService {
             return service;
         }
 
+        const activeAppointments = await this.serviceCatalogRepository.countActiveAppointmentsByServiceId(id);
+
+        if (activeAppointments > 0) {
+            throw new AppError('Service cannot be deactivated while active appointments reference it', 409);
+        }
+
         return this.serviceCatalogRepository.deactivate(id);
     }
 }

@@ -120,6 +120,15 @@ const options = {
                     properties: {
                         id: { type: 'string', format: 'uuid' },
                         departmentId: { type: 'string', format: 'uuid' },
+                        department: {
+                            type: 'object',
+                            nullable: true,
+                            properties: {
+                                id: { type: 'string', format: 'uuid' },
+                                name: { type: 'string', example: 'Cardiology' },
+                                isActive: { type: 'boolean', example: true },
+                            },
+                        },
                         name: { type: 'string', example: 'Initial Consultation' },
                         description: {
                             type: 'string',

@@ -34,6 +34,7 @@ export interface ServiceCatalogRepository {
     create(data: CreateServiceCatalogData): Promise<ServiceCatalogEntity>;
     findById(id: string): Promise<ServiceCatalogEntity | null>;
     departmentExists(id: string): Promise<boolean>;
+    countActiveAppointmentsByServiceId(id: string): Promise<number>;
     list(filters: ListServiceCatalogFilters): Promise<ServiceCatalogListResult>;
     update(id: string, data: UpdateServiceCatalogData): Promise<ServiceCatalogEntity>;
     deactivate(id: string): Promise<ServiceCatalogEntity>;

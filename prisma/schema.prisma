@@ -271,6 +271,7 @@ model Patient {
   gender            String?
   bloodType         BloodType?      @map("blood_type")
   personalNumber    String?         @map("personal_number")
+  personalNumberHash String?        @unique @map("personal_number_hash")
   address           String?
   emergencyContact  String?         @map("emergency_contact")
   emergencyPhone    String?         @map("emergency_phone")
@@ -292,6 +293,7 @@ model Patient {
   @@index([lastName, firstName])
   @@index([email])
   @@index([phone])
+  @@index([personalNumberHash])
   @@index([bloodType])
   @@index([isActive])
   @@map("patients")

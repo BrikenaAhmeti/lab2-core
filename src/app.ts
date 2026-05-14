@@ -10,6 +10,7 @@ import { departmentRoutes } from './modules/departments/presentation/department.
 import { serviceCatalogRoutes } from './modules/service-catalog/presentation/service-catalog.routes';
 import { staffPositionTypeRoutes } from './modules/staff-position-types/presentation/staff-position-type.routes';
 import { staffRoutes } from './modules/staff/presentation/staff.routes';
+import { patientRoutes } from './modules/patients/presentation/patient.routes';
 import { settingRoutes } from './modules/settings/presentation/setting.routes';
 import { swaggerSpec } from './docs/swagger';
 
@@ -69,6 +70,7 @@ export function createApp() {
     app.use('/api/services', serviceCatalogRoutes);
     app.use('/api/staff-position-types', staffPositionTypeRoutes);
     app.use('/api/staff', staffRoutes);
+    app.use('/api/patients', patientRoutes);
     app.use('/api/settings', settingRoutes);
 
     app.use(notFoundHandler);

@@ -221,6 +221,8 @@ model StaffSchedule {
   startTime           String       @map("start_time")
   endTime             String       @map("end_time")
   slotDurationMinutes Int          @map("slot_duration_minutes")
+  breakStart          String?      @map("break_start")
+  breakEnd            String?      @map("break_end")
   validFrom           DateTime?    @map("valid_from") @db.Date
   validTo             DateTime?    @map("valid_to") @db.Date
   isActive            Boolean      @default(true) @map("is_active")

@@ -223,4 +223,4 @@ describe('Staff position type routes', () => {
         expect(response.status).toBe(403);
         expect(response.body.message).toBe('Forbidden');
     });
-}
+});

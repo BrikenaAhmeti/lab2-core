@@ -297,6 +297,122 @@ const options = {
                         isActive: { type: 'boolean', example: true },
                     },
                 },
+                GroupedSettingItem: {
+                    type: 'object',
+                    properties: {
+                        key: { type: 'string', example: 'facility_name' },
+                        label: { type: 'string', example: 'Facility Name' },
+                        description: {
+                            type: 'string',
+                            example: 'Organization name shown across the platform.',
+                        },
+                        category: {
+                            type: 'string',
+                            example: 'facility',
+                        },
+                        value: {
+                            nullable: true,
+                            oneOf: [
+                                { type: 'string' },
+                                { type: 'number' },
+                                { type: 'boolean' },
+                                { type: 'object', additionalProperties: true },
+                                { type: 'array', items: {} },
+                            ],
+                        },
+                        isPublic: { type: 'boolean', example: false },
+                        readOnly: { type: 'boolean', example: false },
+                        updatedAt: { type: 'string', format: 'date-time' },
+                        updatedBy: {
+                            type: 'string',
+                            nullable: true,
+                            format: 'uuid',
+                        },
+                    },
+                },
+                GroupedSettingsCategory: {
+                    type: 'object',
+                    properties: {
+                        label: { type: 'string', example: 'Facility' },
+                        settings: {
+                            type: 'array',
+                            items: { $ref: '#/components/schemas/GroupedSettingItem' },
+                        },
+                    },
+                },
+                GroupedSettingsResponse: {
+                    type: 'object',
+                    additionalProperties: {
+                        $ref: '#/components/schemas/GroupedSettingsCategory',
+                    },
+                    example: {
+                        facility: {
+                            label: 'Facility',
+                            settings: [
+                                {
+                                    key: 'facility_name',
+                                    label: 'Facility Name',
+                                    category: 'facility',
+                                    value: 'MedSphere Demo Clinic',
+                                },
+                            ],
+                        },
+                    },
+                },
+                UpdateSettingRequest: {
+                    type: 'object',
+                    required: ['value'],
+                    properties: {
+                        value: {
+                            nullable: true,
+                            oneOf: [
+                                { type: 'string' },
+                                { type: 'number' },
+                                { type: 'boolean' },
+                                { type: 'object', additionalProperties: true },
+                                { type: 'array', items: {} },
+                            ],
+                        },
+                    },
+                },
+                BulkUpdateSettingsRequest: {
+                    type: 'object',
+                    required: ['settings'],
+                    properties: {
+                        settings: {
+                            type: 'array',
+                            items: {
+                                type: 'object',
+                                required: ['key', 'value'],
+                                properties: {
+                                    key: { type: 'string', example: 'facility_name' },
+                                    value: {
+                                        nullable: true,
+                                        oneOf: [
+                                            { type: 'string' },
+                                            { type: 'number' },
+                                            { type: 'boolean' },
+                                            {
+                                                type: 'object',
+                                                additionalProperties: true,
+                                            },
+                                            { type: 'array', items: {} },
+                                        ],
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                BulkUpdateSettingsResponse: {
+                    type: 'object',
+                    properties: {
+                        items: {
+                            type: 'array',
+                            items: { $ref: '#/components/schemas/GroupedSettingItem' },
+                        },
+                    },
+                },
             },
         },
     },

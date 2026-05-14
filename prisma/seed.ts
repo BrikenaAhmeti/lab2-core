@@ -34,27 +34,71 @@ const PERMISSIONS = [
         scope: 'all',
         description: 'Create, update, and deactivate staff position types across all scopes',
     },
+    {
+        name: 'staff:read',
+        scope: 'all',
+        description: 'Read staff profiles and department assignments across all scopes',
+    },
+    {
+        name: 'staff:manage',
+        scope: 'all',
+        description: 'Create, update, and deactivate staff profiles across all scopes',
+    },
+    {
+        name: 'settings:read',
+        scope: 'all',
+        description: 'Read platform settings across all scopes',
+    },
+    {
+        name: 'settings:manage',
+        scope: 'all',
+        description: 'Update platform settings across all scopes',
+    },
 ] as const;
 
 const SETTINGS = [
     {
-        key: 'facility.profile',
-        value: {
-            name: 'MedSphere Demo Clinic',
-            timezone: 'Europe/Belgrade',
-            currency: 'EUR',
-        },
-        description: 'Core facility profile defaults',
+        key: 'facility_name',
+        value: 'MedSphere Demo Clinic',
+        description: 'Facility display name',
         isPublic: false,
     },
     {
-        key: 'appointments.defaults',
+        key: 'default_slot_duration',
+        value: 30,
+        description: 'Default appointment slot duration in minutes',
+        isPublic: false,
+    },
+    {
+        key: 'working_hours',
         value: {
-            slotIntervalMinutes: 30,
-            leadTimeHours: 24,
-            allowPublicBooking: true,
+            monday: { start: '08:00', end: '18:00' },
+            tuesday: { start: '08:00', end: '18:00' },
+            wednesday: { start: '08:00', end: '18:00' },
+            thursday: { start: '08:00', end: '18:00' },
+            friday: { start: '08:00', end: '18:00' },
+            saturday: { start: '09:00', end: '13:00' },
+            sunday: { isClosed: true },
         },
-        description: 'Default appointment configuration',
+        description: 'Facility-wide working hours',
+        isPublic: false,
+    },
+    {
+        key: 'password_min_length',
+        value: 12,
+        description: 'Minimum password length',
+        isPublic: false,
+    },
+    {
+        key: 'appointment_reminder_24h',
+        value: true,
+        description: 'Enable 24-hour appointment reminders',
+        isPublic: false,
+    },
+    {
+        key: 'appointment_reminder_1h',
+        value: true,
+        description: 'Enable 1-hour appointment reminders',
         isPublic: false,
     },
     {

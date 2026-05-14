@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { DepartmentController } from './department.controller';
 import { authMiddleware } from '../../../shared/middleware/auth.middleware';
 import { requirePermission } from '../../../shared/middleware/require-permission';
+import { departmentStaffRoutes } from '../../staff/presentation/staff.routes';
 
 const controller = new DepartmentController();
 
@@ -115,6 +116,8 @@ departmentRoutes.get(
         }
     },
 );
+
+departmentRoutes.use('/:id/staff', departmentStaffRoutes);
 
 /**
  * @openapi

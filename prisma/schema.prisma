@@ -794,12 +794,17 @@ model AuditLog {
   performedByUserId String? @db.Uuid @map("performed_by_user_id")
   ipAddress        String?  @map("ip_address")
   userAgent        String?  @map("user_agent")
+  oldValue         Json?    @map("old_value")
+  newValue         Json?    @map("new_value")
+  requestId        String?  @map("request_id")
   metadata         Json?
   createdAt        DateTime @default(now()) @map("created_at")
 
   @@index([entityType, entityId])
   @@index([action])
   @@index([performedByUserId])
+  @@index([ipAddress])
+  @@index([requestId])
   @@index([createdAt])
   @@map("audit_logs")
 }

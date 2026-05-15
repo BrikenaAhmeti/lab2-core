@@ -14,7 +14,22 @@ function toJsonInput(value: unknown) {
     return value as Prisma.InputJsonValue;
 }
 
-function toAuditJsonValue(value: unknown): Prisma.InputJsonValue | null {
+function toAuditJsonValue(value: unknown):
+    | Prisma.InputJsonValue
+    | typeof Prisma.JsonNull
+    | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (value === null) {
+        return Prisma.JsonNull;
+    }
+
+    return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+function toMetadataJsonValue(value: unknown): Prisma.InputJsonValue | null {
     if (value === undefined || value === null) {
         return null;
     }
@@ -30,11 +45,13 @@ function buildAuditLogData(auditEntry: SettingAuditEntry, auditContext: AuditCon
         performedByUserId: auditContext.performedByUserId ?? null,
         ipAddress: auditContext.ipAddress ?? null,
         userAgent: auditContext.userAgent ?? null,
+        oldValue: toAuditJsonValue(auditEntry.previousValue),
+        newValue: toAuditJsonValue(auditEntry.nextValue),
         metadata: {
             key: auditEntry.key,
             category: auditEntry.category,
-            previousValue: toAuditJsonValue(auditEntry.previousValue),
-            nextValue: toAuditJsonValue(auditEntry.nextValue),
+            previousValue: toMetadataJsonValue(auditEntry.previousValue),
+            nextValue: toMetadataJsonValue(auditEntry.nextValue),
         } satisfies Prisma.InputJsonValue,
     };
 }

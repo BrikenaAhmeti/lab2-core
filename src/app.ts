@@ -1,17 +1,20 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env';
 import { errorHandler } from './shared/middleware/error-handler';
 import { notFoundHandler } from './shared/middleware/not-found';
+import { auditLogger } from './shared/middleware/audit-logger';
+import { requestContext } from './shared/middleware/request-context';
+import { requestLogger } from './shared/middleware/request-logger';
 import { departmentRoutes } from './modules/departments/presentation/department.routes';
 import { serviceCatalogRoutes } from './modules/service-catalog/presentation/service-catalog.routes';
 import { staffPositionTypeRoutes } from './modules/staff-position-types/presentation/staff-position-type.routes';
 import { staffRoutes } from './modules/staff/presentation/staff.routes';
 import { patientRoutes } from './modules/patients/presentation/patient.routes';
 import { settingRoutes } from './modules/settings/presentation/setting.routes';
+import { auditLogRoutes } from './modules/audit-logs/presentation/audit-log.routes';
 import { swaggerSpec } from './docs/swagger';
 
 /**
@@ -54,8 +57,10 @@ export function createApp() {
             },
         }),
     );
-    app.use(morgan('dev'));
+    app.use(requestContext);
+    app.use(requestLogger);
     app.use(express.json());
+    app.use(auditLogger);
 
     app.get('/health', (_req, res) => {
         res.json({ status: 'ok' });
@@ -72,6 +77,7 @@ export function createApp() {
     app.use('/api/staff', staffRoutes);
     app.use('/api/patients', patientRoutes);
     app.use('/api/settings', settingRoutes);
+    app.use('/api/audit-logs', auditLogRoutes);
 
     app.use(notFoundHandler);
     app.use(errorHandler);

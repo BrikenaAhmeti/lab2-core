@@ -1,0 +1,116 @@
+name: medsphere-core
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-medsphere}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medsphere}
+      POSTGRES_DB: ${POSTGRES_DB:-department_service}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:-medsphere_redis_password}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-medsphere_redis_password}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-medsphere}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-medsphere}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-medsphere}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --username \"$${MONGO_INITDB_ROOT_USERNAME}\" --password \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  core-service-migrate:
+    build:
+      context: .
+      target: build
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-medsphere}:${POSTGRES_PASSWORD:-medsphere}@postgres:5432/${POSTGRES_DB:-department_service}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["npx", "prisma", "migrate", "deploy"]
+    restart: "no"
+
+  core-service:
+    build:
+      context: .
+      target: production
+    environment:
+      NODE_ENV: production
+      PORT: 3007
+      DATABASE_URL: postgresql://${POSTGRES_USER:-medsphere}:${POSTGRES_PASSWORD:-medsphere}@postgres:5432/${POSTGRES_DB:-department_service}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-replace-with-auth-service-access-secret}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5173}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      AUDIT_LOGGING_ENABLED: ${AUDIT_LOGGING_ENABLED:-true}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-medsphere_redis_password}@redis:6379
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-medsphere}:${MONGO_ROOT_PASSWORD:-medsphere}@mongodb:27017/${MONGO_DATABASE:-medsphere}?authSource=admin
+    ports:
+      - "${CORE_SERVICE_PORT:-3007}:3007"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      core-service-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://localhost:3007/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  mongodb_data:

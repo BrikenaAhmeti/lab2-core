@@ -42,7 +42,47 @@ Copy `.env.example` and provide:
 - `npm run test:integration` runs integration tests only
 - `npm run prisma:generate` generates Prisma client
 - `npm run prisma:migrate` creates/applies local migrations
+- `npm run prisma:migrate:deploy` applies existing migrations, used by Docker
 - `npm run seed` seeds department permission definitions
+- `npm run docker:up` builds and starts the service with Postgres, Redis, and MongoDB
+- `npm run docker:down` stops the full Docker stack
+- `npm run docker:infra` starts only Postgres, Redis, and MongoDB for local service development
+- `npm run docker:infra:down` stops the local infrastructure stack
+
+## Docker
+
+The repo includes Docker support for this service and the shared infrastructure required by the MedSphere sprint plan.
+
+Full stack for this repo:
+
+```bash
+cp .env.example .env
+npm run docker:up
+```
+
+This starts:
+
+- `postgres` with a persistent `postgres_data` volume
+- `redis` with password auth and append-only persistence
+- `mongodb` with a persistent `mongodb_data` volume
+- `core-service-migrate`, a one-time migration container
+- `core-service`, exposed on `http://localhost:3007`
+
+Health check:
+
+```bash
+curl http://localhost:3007/health
+```
+
+For development, start only infrastructure and run the service natively:
+
+```bash
+npm run docker:infra
+npm run prisma:migrate
+npm run dev
+```
+
+Inside Docker, service-to-service URLs use container names. For example, `DATABASE_URL` points to `postgres:5432`, not `localhost:5432`.
 
 ## Auth compatibility
 

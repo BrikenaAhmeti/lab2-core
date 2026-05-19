@@ -9,6 +9,10 @@ export function requestLogger(
     const startedAt = Date.now();
 
     res.on('finish', () => {
+        if (req.path === '/health' && res.statusCode < 400) {
+            return;
+        }
+
         const level = res.statusCode >= 500
             ? 'error'
             : res.statusCode >= 400

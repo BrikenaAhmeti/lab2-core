@@ -14,7 +14,7 @@ import { UpsertWeeklyScheduleHandler } from '../application/handlers/upsert-week
 import { GetAvailableSlotsQuery } from '../application/queries/get-available-slots.query';
 import { GetWeeklyScheduleQuery } from '../application/queries/get-weekly-schedule.query';
 import { ListScheduleExceptionsQuery } from '../application/queries/list-schedule-exceptions.query';
-import { NoopSlotLockRepository } from '../infrastructure/noop-slot-lock.repository';
+import { createAppointmentSlotLockRepository } from '../../appointments/infrastructure/appointment-slot-lock.repository';
 import { SchedulePrismaRepository } from '../infrastructure/schedule.prisma.repository';
 import { ScheduleService } from '../services/schedule.service';
 import { TIME_PATTERN, dateOnlyToUtcDate } from '../domain/slot-generator';
@@ -98,7 +98,7 @@ export class ScheduleController {
     private readonly queryBus = new QueryBus();
     private readonly service = new ScheduleService(
         new SchedulePrismaRepository(),
-        new NoopSlotLockRepository(),
+        createAppointmentSlotLockRepository(),
     );
     private readonly getWeeklyScheduleHandler = new GetWeeklyScheduleHandler(
         this.service,

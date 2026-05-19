@@ -45,6 +45,26 @@ const PERMISSIONS = [
         description: 'Create, update, and deactivate staff profiles across all scopes',
     },
     {
+        name: 'appointments:read',
+        scope: 'all',
+        description: 'Read appointments across all scopes',
+    },
+    {
+        name: 'appointments:create',
+        scope: 'all',
+        description: 'Book appointments across all scopes',
+    },
+    {
+        name: 'appointments:update',
+        scope: 'all',
+        description: 'Reschedule appointments and update appointment status across all scopes',
+    },
+    {
+        name: 'appointments:cancel',
+        scope: 'all',
+        description: 'Cancel appointments across all scopes',
+    },
+    {
         name: 'settings:read',
         scope: 'all',
         description: 'Read platform settings across all scopes',

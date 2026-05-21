@@ -242,8 +242,14 @@ export class PatientPrismaRepository implements PatientRepository {
                     select: {
                         id: true,
                         issuedAt: true,
+                        isVoided: true,
                         notes: true,
                         items: { select: { medicationName: true }, take: 3 },
+                        pharmacyQueue: {
+                            select: { status: true },
+                            orderBy: { requestedAt: 'asc' },
+                            take: 1,
+                        },
                     },
                 }),
                 prisma.labOrder.findMany({
@@ -293,7 +299,9 @@ export class PatientPrismaRepository implements PatientRepository {
                 type: 'prescription' as const,
                 occurredAt: prescription.issuedAt,
                 title: 'Prescription issued',
-                status: null,
+                status: prescription.isVoided
+                    ? 'VOIDED'
+                    : prescription.pharmacyQueue[0]?.status ?? 'ACTIVE',
                 summary:
                     prescription.items.map((item) => item.medicationName).join(', ') ||
                     prescription.notes,

@@ -75,6 +75,16 @@ const PERMISSIONS = [
         description: 'Create, finalize, and amend medical records across all scopes',
     },
     {
+        name: 'prescriptions:read',
+        scope: 'all',
+        description: 'Read prescriptions across all scopes',
+    },
+    {
+        name: 'prescriptions:write',
+        scope: 'all',
+        description: 'Create and void prescriptions across all scopes',
+    },
+    {
         name: 'settings:read',
         scope: 'all',
         description: 'Read platform settings across all scopes',

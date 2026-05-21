@@ -398,6 +398,10 @@ model Prescription {
   issuedAt       DateTime           @default(now()) @map("issued_at")
   expiresAt      DateTime?          @map("expires_at")
   notes          String?
+  isVoided       Boolean            @default(false) @map("is_voided")
+  voidedAt       DateTime?          @map("voided_at")
+  voidReason     String?            @map("void_reason")
+  voidedByUserId String?            @db.Uuid @map("voided_by_user_id")
   createdAt      DateTime           @default(now()) @map("created_at")
   updatedAt      DateTime           @updatedAt @map("updated_at")
   createdBy      String?            @db.Uuid @map("created_by")
@@ -414,6 +418,7 @@ model Prescription {
   @@index([appointmentId])
   @@index([staffProfileId])
   @@index([issuedAt])
+  @@index([isVoided])
   @@map("prescriptions")
 }
 

@@ -351,6 +351,7 @@ model MedicalRecord {
   treatmentPlan          String?                  @map("treatment_plan")
   notes                  String?
   followUpInstructions   String?                  @map("follow_up_instructions")
+  isFinalized            Boolean                  @default(false) @map("is_finalized")
   createdAt              DateTime                 @default(now()) @map("created_at")
   updatedAt              DateTime                 @updatedAt @map("updated_at")
   createdBy              String?                  @db.Uuid @map("created_by")
@@ -367,6 +368,7 @@ model MedicalRecord {
   @@index([appointmentId])
   @@index([staffProfileId])
   @@index([departmentId])
+  @@index([isFinalized])
   @@map("medical_records")
 }
 

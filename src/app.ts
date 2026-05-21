@@ -16,6 +16,7 @@ import { patientRoutes } from './modules/patients/presentation/patient.routes';
 import { settingRoutes } from './modules/settings/presentation/setting.routes';
 import { auditLogRoutes } from './modules/audit-logs/presentation/audit-log.routes';
 import { appointmentRoutes } from './modules/appointments/presentation/appointment.routes';
+import { medicalRecordRoutes } from './modules/medical-records/presentation/medical-record.routes';
 import { swaggerSpec } from './docs/swagger';
 
 /**
@@ -78,6 +79,7 @@ export function createApp() {
     app.use('/api/staff', staffRoutes);
     app.use('/api/patients', patientRoutes);
     app.use('/api/appointments', appointmentRoutes);
+    app.use('/api/medical-records', medicalRecordRoutes);
     app.use('/api/settings', settingRoutes);
     app.use('/api/audit-logs', auditLogRoutes);
 

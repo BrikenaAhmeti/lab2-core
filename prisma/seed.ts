@@ -65,6 +65,16 @@ const PERMISSIONS = [
         description: 'Cancel appointments across all scopes',
     },
     {
+        name: 'medical_records:read',
+        scope: 'all',
+        description: 'Read medical records across all scopes',
+    },
+    {
+        name: 'medical_records:write',
+        scope: 'all',
+        description: 'Create, finalize, and amend medical records across all scopes',
+    },
+    {
         name: 'settings:read',
         scope: 'all',
         description: 'Read platform settings across all scopes',

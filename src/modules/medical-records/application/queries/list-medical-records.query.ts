@@ -1,0 +1,9 @@
+export class ListMedicalRecordsQuery {
+    constructor(
+        public readonly page: number,
+        public readonly limit: number,
+        public readonly patientId?: string,
+        public readonly actorUserId?: string,
+        public readonly canReadAll = false,
+    ) {}
+}

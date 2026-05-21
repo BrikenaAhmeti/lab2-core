@@ -85,6 +85,41 @@ const PERMISSIONS = [
         description: 'Create and void prescriptions across all scopes',
     },
     {
+        name: 'lab_tests:read',
+        scope: 'all',
+        description: 'Read laboratory test catalog entries across all scopes',
+    },
+    {
+        name: 'lab_tests:manage',
+        scope: 'all',
+        description: 'Create, update, and deactivate lab tests across all scopes',
+    },
+    {
+        name: 'lab_orders:read',
+        scope: 'all',
+        description: 'Read lab orders across all scopes',
+    },
+    {
+        name: 'lab_orders:create',
+        scope: 'all',
+        description: 'Create lab orders across all scopes',
+    },
+    {
+        name: 'lab_orders:update',
+        scope: 'all',
+        description: 'Update lab order workflow status across all scopes',
+    },
+    {
+        name: 'lab_results:enter',
+        scope: 'all',
+        description: 'Enter lab test results across all scopes',
+    },
+    {
+        name: 'lab_results:review',
+        scope: 'all',
+        description: 'Review and release lab results across all scopes',
+    },
+    {
         name: 'settings:read',
         scope: 'all',
         description: 'Read platform settings across all scopes',

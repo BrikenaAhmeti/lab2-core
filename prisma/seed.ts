@@ -120,6 +120,16 @@ const PERMISSIONS = [
         description: 'Review and release lab results across all scopes',
     },
     {
+        name: 'billing:read',
+        scope: 'all',
+        description: 'Read billing records and billing stats across all scopes',
+    },
+    {
+        name: 'billing:manage',
+        scope: 'all',
+        description: 'Edit billings and record payments across all scopes',
+    },
+    {
         name: 'settings:read',
         scope: 'all',
         description: 'Read platform settings across all scopes',

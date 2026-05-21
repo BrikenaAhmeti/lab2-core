@@ -27,7 +27,7 @@ import {
 } from '../infrastructure/appointment-audit.logger';
 import { AppointmentPrismaRepository } from '../infrastructure/appointment.prisma.repository';
 import { createAppointmentSlotLockRepository } from '../infrastructure/appointment-slot-lock.repository';
-import { NoopAppointmentEventPublisher } from '../infrastructure/noop-appointment-event.publisher';
+import { BillingAppointmentEventPublisher } from '../../billing/infrastructure/billing-appointment-event.publisher';
 import { AppointmentService } from '../services/appointment.service';
 
 const appointmentStatusValues = [
@@ -148,7 +148,7 @@ export class AppointmentController {
         new AppointmentPrismaRepository(),
         new ScheduleService(new SchedulePrismaRepository(), this.slotLockRepository),
         this.slotLockRepository,
-        new NoopAppointmentEventPublisher(),
+        new BillingAppointmentEventPublisher(),
         env.auditLoggingEnabled
             ? new AuditLogAppointmentAuditLogger()
             : new NoopAppointmentAuditLogger(),

@@ -319,6 +319,8 @@ export class AppointmentService {
         await this.publishSafely(
             data.status === AppointmentStatus.CANCELLED
                 ? 'AppointmentCancelled'
+                : data.status === AppointmentStatus.COMPLETED
+                    ? 'AppointmentCompleted'
                 : 'AppointmentStatusChanged',
             {
                 appointment: updatedAppointment,

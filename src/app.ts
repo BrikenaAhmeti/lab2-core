@@ -22,6 +22,7 @@ import {
     labOrderRoutes,
     labTestRoutes,
 } from './modules/lab/presentation/lab.routes';
+import { billingRoutes } from './modules/billing/presentation/billing.routes';
 import { swaggerSpec } from './docs/swagger';
 
 /**
@@ -88,6 +89,7 @@ export function createApp() {
     app.use('/api/prescriptions', prescriptionRoutes);
     app.use('/api/lab-tests', labTestRoutes);
     app.use('/api/lab-orders', labOrderRoutes);
+    app.use('/api/billings', billingRoutes);
     app.use('/api/settings', settingRoutes);
     app.use('/api/audit-logs', auditLogRoutes);
 

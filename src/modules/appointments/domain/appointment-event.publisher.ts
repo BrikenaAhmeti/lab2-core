@@ -4,6 +4,7 @@ export type AppointmentEventType =
     | 'AppointmentBooked'
     | 'AppointmentRescheduled'
     | 'AppointmentStatusChanged'
+    | 'AppointmentCompleted'
     | 'AppointmentCancelled';
 
 export interface AppointmentEventPayload {

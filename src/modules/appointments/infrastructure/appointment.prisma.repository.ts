@@ -20,6 +20,7 @@ const appointmentInclude = {
     patient: {
         select: {
             id: true,
+            userId: true,
             firstName: true,
             lastName: true,
             email: true,
@@ -216,6 +217,7 @@ export class AppointmentPrismaRepository implements AppointmentRepository {
             },
             select: {
                 id: true,
+                userId: true,
                 firstName: true,
                 lastName: true,
                 email: true,
@@ -309,6 +311,30 @@ export class AppointmentPrismaRepository implements AppointmentRepository {
                 },
             },
         });
+    }
+
+    async listReminderCandidates(filters: {
+        from: Date;
+        to: Date;
+    }): Promise<AppointmentView[]> {
+        const appointments = await prisma.appointment.findMany({
+            where: {
+                scheduledAt: {
+                    gte: filters.from,
+                    lt: filters.to,
+                },
+                status: {
+                    in: [
+                        AppointmentStatus.SCHEDULED,
+                        AppointmentStatus.CONFIRMED,
+                    ],
+                },
+            },
+            include: appointmentInclude,
+            orderBy: { scheduledAt: 'asc' },
+        });
+
+        return appointments.map(toAppointmentView);
     }
 
     async list(filters: ListAppointmentsFilters): Promise<AppointmentListResult> {

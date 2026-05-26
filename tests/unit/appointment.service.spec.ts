@@ -16,6 +16,7 @@ const endAt = new Date('2026-05-20T09:30:00.000Z');
 
 const patient = {
     id: patientId,
+    userId: 'b9fc5d6a-1af8-49a2-8467-2a60ceef7057',
     firstName: 'Ada',
     lastName: 'Lovelace',
     email: 'ada@medsphere.local',
@@ -98,6 +99,7 @@ function createAppointmentRepositoryMock(): jest.Mocked<AppointmentRepository> {
         findServiceById: jest.fn(),
         findStaffById: jest.fn(),
         countConflictingAppointments: jest.fn(),
+        listReminderCandidates: jest.fn(),
         list: jest.fn(),
         listToday: jest.fn(),
         reschedule: jest.fn(),

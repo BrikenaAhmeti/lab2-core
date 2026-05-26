@@ -14,11 +14,13 @@ import { RescheduleAppointmentCommand } from '../application/commands/reschedule
 import { UpdateAppointmentStatusCommand } from '../application/commands/update-appointment-status.command';
 import { BookAppointmentHandler } from '../application/handlers/book-appointment.handler';
 import { GetAppointmentByIdHandler } from '../application/handlers/get-appointment-by-id.handler';
+import { ListAppointmentReminderCandidatesHandler } from '../application/handlers/list-appointment-reminder-candidates.handler';
 import { ListAppointmentsHandler } from '../application/handlers/list-appointments.handler';
 import { ListTodayAppointmentsHandler } from '../application/handlers/list-today-appointments.handler';
 import { RescheduleAppointmentHandler } from '../application/handlers/reschedule-appointment.handler';
 import { UpdateAppointmentStatusHandler } from '../application/handlers/update-appointment-status.handler';
 import { GetAppointmentByIdQuery } from '../application/queries/get-appointment-by-id.query';
+import { ListAppointmentReminderCandidatesQuery } from '../application/queries/list-appointment-reminder-candidates.query';
 import { ListAppointmentsQuery } from '../application/queries/list-appointments.query';
 import { ListTodayAppointmentsQuery } from '../application/queries/list-today-appointments.query';
 import {
@@ -28,6 +30,8 @@ import {
 import { AppointmentPrismaRepository } from '../infrastructure/appointment.prisma.repository';
 import { createAppointmentSlotLockRepository } from '../infrastructure/appointment-slot-lock.repository';
 import { BillingAppointmentEventPublisher } from '../../billing/infrastructure/billing-appointment-event.publisher';
+import { CompositeAppointmentEventPublisher } from '../infrastructure/composite-appointment-event.publisher';
+import { NotificationAppointmentEventPublisher } from '../infrastructure/notification-appointment-event.publisher';
 import { AppointmentService } from '../services/appointment.service';
 
 const appointmentStatusValues = [
@@ -96,6 +100,15 @@ const listAppointmentsQuerySchema = z.object({
     status: z.enum(appointmentStatusValues).optional(),
 });
 
+const reminderCandidatesQuerySchema = z
+    .object({
+        from: dateTimeSchema,
+        to: dateTimeSchema,
+    })
+    .refine((query) => query.from < query.to, {
+        message: 'from must be before to',
+    });
+
 const rescheduleAppointmentBodySchema = z.object({
     scheduledAt: dateTimeSchema,
     serviceCatalogId: z.string().uuid('Invalid service id').optional(),
@@ -148,7 +161,10 @@ export class AppointmentController {
         new AppointmentPrismaRepository(),
         new ScheduleService(new SchedulePrismaRepository(), this.slotLockRepository),
         this.slotLockRepository,
-        new BillingAppointmentEventPublisher(),
+        new CompositeAppointmentEventPublisher([
+            new BillingAppointmentEventPublisher(),
+            new NotificationAppointmentEventPublisher(),
+        ]),
         env.auditLoggingEnabled
             ? new AuditLogAppointmentAuditLogger()
             : new NoopAppointmentAuditLogger(),
@@ -156,6 +172,8 @@ export class AppointmentController {
     private readonly bookAppointmentHandler = new BookAppointmentHandler(this.service);
     private readonly listAppointmentsHandler = new ListAppointmentsHandler(this.service);
     private readonly listTodayAppointmentsHandler = new ListTodayAppointmentsHandler(this.service);
+    private readonly listAppointmentReminderCandidatesHandler =
+        new ListAppointmentReminderCandidatesHandler(this.service);
     private readonly getAppointmentByIdHandler = new GetAppointmentByIdHandler(this.service);
     private readonly rescheduleAppointmentHandler = new RescheduleAppointmentHandler(this.service);
     private readonly updateAppointmentStatusHandler = new UpdateAppointmentStatusHandler(this.service);
@@ -205,6 +223,16 @@ export class AppointmentController {
         );
 
         return res.status(200).json(result);
+    }
+
+    async reminderCandidates(req: Request, res: Response) {
+        const query = reminderCandidatesQuerySchema.parse(req.query);
+        const result = await this.queryBus.execute(
+            this.listAppointmentReminderCandidatesHandler,
+            new ListAppointmentReminderCandidatesQuery(query.from, query.to),
+        );
+
+        return res.status(200).json({ data: result });
     }
 
     async getById(req: Request, res: Response) {

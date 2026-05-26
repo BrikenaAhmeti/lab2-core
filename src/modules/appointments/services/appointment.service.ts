@@ -168,6 +168,14 @@ export class AppointmentService {
         return this.appointmentRepository.listToday(now);
     }
 
+    async listReminderCandidates(from: Date, to: Date) {
+        if (from >= to) {
+            throw new AppError('from must be before to', 400);
+        }
+
+        return this.appointmentRepository.listReminderCandidates({ from, to });
+    }
+
     async getAppointmentById(id: string) {
         const appointment = await this.appointmentRepository.findById(id);
 

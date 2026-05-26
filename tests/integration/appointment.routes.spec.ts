@@ -31,6 +31,7 @@ const department = {
 
 const patient = {
     id: patientId,
+    userId: 'b9fc5d6a-1af8-49a2-8467-2a60ceef7057',
     firstName: 'Ada',
     lastName: 'Lovelace',
     email: 'ada@medsphere.local',

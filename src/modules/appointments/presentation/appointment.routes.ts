@@ -1,11 +1,25 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../../shared/middleware/auth.middleware';
+import { requireInternalApiKey } from '../../../shared/middleware/internal-api-key';
 import { requirePermission } from '../../../shared/middleware/require-permission';
 import { AppointmentController } from './appointment.controller';
 
 const controller = new AppointmentController();
 
 export const appointmentRoutes = Router();
+export const internalAppointmentRoutes = Router();
+
+internalAppointmentRoutes.get(
+    '/reminders',
+    requireInternalApiKey,
+    async (req, res, next) => {
+        try {
+            await controller.reminderCandidates(req, res);
+        } catch (error) {
+            next(error);
+        }
+    },
+);
 
 appointmentRoutes.post(
     '/',

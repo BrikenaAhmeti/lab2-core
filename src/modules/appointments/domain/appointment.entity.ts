@@ -2,6 +2,7 @@ import { AppointmentStatus, AppointmentType } from '../../../generated/prisma';
 
 export interface AppointmentPatientSummary {
     id: string;
+    userId: string | null;
     firstName: string;
     lastName: string;
     email: string | null;

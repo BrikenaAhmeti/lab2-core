@@ -10,6 +10,8 @@ export const env = {
     frontendOrigins: process.env.FRONTEND_ORIGINS || '',
     redisUrl: process.env.REDIS_URL || '',
     mongodbUri: process.env.MONGODB_URI || '',
+    internalApiKey: process.env.INTERNAL_API_KEY || '',
+    notificationServiceUrl: process.env.NOTIFICATION_SERVICE_URL || '',
     logLevel: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'silent' : 'info'),
     sentryDsn: process.env.SENTRY_DSN || '',
     auditLoggingEnabled:

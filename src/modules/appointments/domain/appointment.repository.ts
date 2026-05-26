@@ -63,6 +63,11 @@ export interface AppointmentConflictFilters {
     excludeAppointmentId?: string;
 }
 
+export interface AppointmentReminderFilters {
+    from: Date;
+    to: Date;
+}
+
 export interface AppointmentRepository {
     create(data: CreateAppointmentData): Promise<AppointmentView>;
     findById(id: string): Promise<AppointmentView | null>;
@@ -70,6 +75,7 @@ export interface AppointmentRepository {
     findServiceById(id: string): Promise<AppointmentServiceSummary | null>;
     findStaffById(id: string): Promise<AppointmentStaffAvailabilitySummary | null>;
     countConflictingAppointments(filters: AppointmentConflictFilters): Promise<number>;
+    listReminderCandidates(filters: AppointmentReminderFilters): Promise<AppointmentView[]>;
     list(filters: ListAppointmentsFilters): Promise<AppointmentListResult>;
     listToday(now: Date): Promise<AppointmentView[]>;
     reschedule(id: string, data: RescheduleAppointmentData): Promise<AppointmentView>;

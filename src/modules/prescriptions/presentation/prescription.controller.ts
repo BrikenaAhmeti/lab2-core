@@ -12,7 +12,7 @@ import { VoidPrescriptionHandler } from '../application/handlers/void-prescripti
 import { GetPrescriptionByIdQuery } from '../application/queries/get-prescription-by-id.query';
 import { GetPrescriptionPdfQuery } from '../application/queries/get-prescription-pdf.query';
 import { ListPrescriptionsQuery } from '../application/queries/list-prescriptions.query';
-import { NoopPrescriptionEventPublisher } from '../infrastructure/noop-prescription-event.publisher';
+import { NotificationPrescriptionEventPublisher } from '../infrastructure/notification-prescription-event.publisher';
 import { PrescriptionPrismaRepository } from '../infrastructure/prescription.prisma.repository';
 import { PrescriptionPdfService } from '../services/prescription-pdf.service';
 import { PrescriptionService } from '../services/prescription.service';
@@ -101,7 +101,7 @@ export class PrescriptionController {
     private readonly pdfService = new PrescriptionPdfService();
     private readonly service = new PrescriptionService(
         new PrescriptionPrismaRepository(),
-        new NoopPrescriptionEventPublisher(),
+        new NotificationPrescriptionEventPublisher(),
     );
     private readonly createPrescriptionHandler = new CreatePrescriptionHandler(
         this.service,

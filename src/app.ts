@@ -15,7 +15,10 @@ import { staffRoutes } from './modules/staff/presentation/staff.routes';
 import { patientRoutes } from './modules/patients/presentation/patient.routes';
 import { settingRoutes } from './modules/settings/presentation/setting.routes';
 import { auditLogRoutes } from './modules/audit-logs/presentation/audit-log.routes';
-import { appointmentRoutes } from './modules/appointments/presentation/appointment.routes';
+import {
+    appointmentRoutes,
+    internalAppointmentRoutes,
+} from './modules/appointments/presentation/appointment.routes';
 import { medicalRecordRoutes } from './modules/medical-records/presentation/medical-record.routes';
 import { prescriptionRoutes } from './modules/prescriptions/presentation/prescription.routes';
 import {
@@ -92,6 +95,7 @@ export function createApp() {
     app.use('/api/billings', billingRoutes);
     app.use('/api/settings', settingRoutes);
     app.use('/api/audit-logs', auditLogRoutes);
+    app.use('/internal/appointments', internalAppointmentRoutes);
 
     app.use(notFoundHandler);
     app.use(errorHandler);

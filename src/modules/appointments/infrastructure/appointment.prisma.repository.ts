@@ -155,6 +155,12 @@ function buildListWhere(filters: ListAppointmentsFilters) {
         where.status = filters.status;
     }
 
+    if (filters.hasNoFeedback) {
+        where.feedback = {
+            none: {},
+        };
+    }
+
     if (filters.date) {
         const start = startOfUtcDay(filters.date);
         where.scheduledAt = {

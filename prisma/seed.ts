@@ -130,6 +130,26 @@ const PERMISSIONS = [
         description: 'Edit billings and record payments across all scopes',
     },
     {
+        name: 'feedback:read',
+        scope: 'all',
+        description: 'Read feedback submissions across all scopes',
+    },
+    {
+        name: 'feedback:manage',
+        scope: 'all',
+        description: 'Moderate feedback submissions across all scopes',
+    },
+    {
+        name: 'contact:read',
+        scope: 'all',
+        description: 'Read contact form submissions across all scopes',
+    },
+    {
+        name: 'contact:manage',
+        scope: 'all',
+        description: 'Manage contact form submission statuses across all scopes',
+    },
+    {
         name: 'settings:read',
         scope: 'all',
         description: 'Read platform settings across all scopes',

@@ -32,6 +32,7 @@ export interface ListAppointmentsFilters {
     patientId?: string;
     departmentId?: string;
     status?: AppointmentStatus;
+    hasNoFeedback?: boolean;
 }
 
 export interface RescheduleAppointmentData {

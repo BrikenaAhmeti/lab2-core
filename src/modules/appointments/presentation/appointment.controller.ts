@@ -98,6 +98,10 @@ const listAppointmentsQuerySchema = z.object({
     patientId: z.string().uuid('Invalid patient id').optional(),
     departmentId: z.string().uuid('Invalid department id').optional(),
     status: z.enum(appointmentStatusValues).optional(),
+    hasNoFeedback: z
+        .enum(['true', 'false'])
+        .transform((value) => value === 'true')
+        .optional(),
 });
 
 const reminderCandidatesQuerySchema = z
@@ -210,6 +214,7 @@ export class AppointmentController {
                 query.patientId,
                 query.departmentId,
                 query.status as AppointmentStatus | undefined,
+                query.hasNoFeedback,
             ),
         );
 

@@ -12,5 +12,6 @@ export class ListAppointmentsQuery implements Query {
         public readonly patientId?: string,
         public readonly departmentId?: string,
         public readonly status?: AppointmentStatus,
+        public readonly hasNoFeedback?: boolean,
     ) { }
 }

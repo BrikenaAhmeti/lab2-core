@@ -16,6 +16,7 @@ export class ListAppointmentsHandler implements QueryHandler<ListAppointmentsQue
             patientId: query.patientId,
             departmentId: query.departmentId,
             status: query.status,
+            hasNoFeedback: query.hasNoFeedback,
         });
     }
 }

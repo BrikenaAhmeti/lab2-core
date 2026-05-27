@@ -3,6 +3,7 @@ export class ListMedicalRecordsQuery {
         public readonly page: number,
         public readonly limit: number,
         public readonly patientId?: string,
+        public readonly isFinalized?: boolean,
         public readonly actorUserId?: string,
         public readonly canReadAll = false,
     ) {}

@@ -192,8 +192,48 @@ describe('Medical record routes', () => {
         expect(listSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 patientId,
+                isFinalized: true,
             }),
         );
+    });
+
+    it('allows a patient to download a finalized medical record PDF', async () => {
+        jest.spyOn(
+            MedicalRecordPrismaRepository.prototype,
+            'findById',
+        ).mockResolvedValue({
+            ...record,
+            isFinalized: true,
+        });
+
+        const response = await request(app)
+            .get(`/api/medical-records/${medicalRecordId}/pdf`)
+            .set(
+                'Authorization',
+                `Bearer ${createAccessToken(['medical_records:read:own'], patientUserId)}`,
+            );
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toContain('application/pdf');
+        expect(response.body).toBeInstanceOf(Buffer);
+        expect(response.body.subarray(0, 5).toString()).toBe('%PDF-');
+    });
+
+    it('blocks patient PDF download for draft medical records', async () => {
+        jest.spyOn(
+            MedicalRecordPrismaRepository.prototype,
+            'findById',
+        ).mockResolvedValue(record);
+
+        const response = await request(app)
+            .get(`/api/medical-records/${medicalRecordId}/pdf`)
+            .set(
+                'Authorization',
+                `Bearer ${createAccessToken(['medical_records:read:own'], patientUserId)}`,
+            );
+
+        expect(response.status).toBe(403);
+        expect(response.body.message).toBe('Forbidden');
     });
 
     it('finalizes a draft medical record', async () => {

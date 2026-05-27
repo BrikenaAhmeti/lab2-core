@@ -218,6 +218,72 @@ describe('Appointment routes', () => {
         );
     });
 
+    it('supports the patient dashboard upcoming appointment query', async () => {
+        const listSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'list')
+            .mockResolvedValue({
+                items: [appointment],
+                meta: {
+                    page: 1,
+                    limit: 3,
+                    total: 1,
+                    totalPages: 1,
+                },
+            });
+
+        const response = await request(app)
+            .get(
+                `/api/appointments?patientId=${patientId}&from=2030-01-01T00:00:00.000Z&limit=3`,
+            )
+            .set('Authorization', `Bearer ${createAccessToken(['appointments:read:all'])}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.items).toHaveLength(1);
+        expect(listSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                page: 1,
+                limit: 3,
+                patientId,
+                from: new Date('2030-01-01T00:00:00.000Z'),
+            }),
+        );
+    });
+
+    it('supports completed appointments without feedback prompts', async () => {
+        const completedAppointment = {
+            ...appointment,
+            status: AppointmentStatus.COMPLETED,
+            completedAt: new Date('2030-01-02T09:30:00.000Z'),
+        };
+        const listSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'list')
+            .mockResolvedValue({
+                items: [completedAppointment],
+                meta: {
+                    page: 1,
+                    limit: 10,
+                    total: 1,
+                    totalPages: 1,
+                },
+            });
+
+        const response = await request(app)
+            .get(
+                `/api/appointments?patientId=${patientId}&status=COMPLETED&hasNoFeedback=true`,
+            )
+            .set('Authorization', `Bearer ${createAccessToken(['appointments:read:all'])}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.items).toHaveLength(1);
+        expect(listSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                patientId,
+                status: AppointmentStatus.COMPLETED,
+                hasNoFeedback: true,
+            }),
+        );
+    });
+
     it('updates appointment status through PATCH /api/appointments/:id/status', async () => {
         jest.spyOn(AppointmentPrismaRepository.prototype, 'findById').mockResolvedValue(appointment);
         jest.spyOn(AppointmentPrismaRepository.prototype, 'updateStatus').mockResolvedValue({

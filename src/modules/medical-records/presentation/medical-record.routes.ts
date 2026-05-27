@@ -34,6 +34,19 @@ medicalRecordRoutes.get(
 );
 
 medicalRecordRoutes.get(
+    '/:id/pdf',
+    authMiddleware,
+    requirePermission('medical_records:read'),
+    async (req, res, next) => {
+        try {
+            await controller.downloadPdf(req, res);
+        } catch (error) {
+            next(error);
+        }
+    },
+);
+
+medicalRecordRoutes.get(
     '/:id',
     authMiddleware,
     requirePermission('medical_records:read'),

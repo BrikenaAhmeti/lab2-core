@@ -39,6 +39,7 @@ export interface ListMedicalRecordsFilters {
     page: number;
     limit: number;
     patientId?: string;
+    isFinalized?: boolean;
 }
 
 export interface MedicalRecordRepository {

@@ -301,6 +301,10 @@ export class MedicalRecordPrismaRepository implements MedicalRecordRepository {
             where.patientId = filters.patientId;
         }
 
+        if (filters.isFinalized !== undefined) {
+            where.isFinalized = filters.isFinalized;
+        }
+
         const [items, total] = await prisma.$transaction([
             prisma.medicalRecord.findMany({
                 where,

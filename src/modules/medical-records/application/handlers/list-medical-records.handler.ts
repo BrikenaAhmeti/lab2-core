@@ -12,6 +12,7 @@ implements QueryHandler<ListMedicalRecordsQuery, unknown> {
                 page: query.page,
                 limit: query.limit,
                 patientId: query.patientId,
+                isFinalized: query.isFinalized,
             },
             query.actorUserId,
             query.canReadAll,

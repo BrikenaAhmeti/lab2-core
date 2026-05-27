@@ -251,6 +251,61 @@ describe('Lab routes', () => {
         expect(response.body[0].id).toBe(labOrderId);
     });
 
+    it('lists completed patient lab orders with result flags and reference ranges', async () => {
+        const completedOrder: LabOrderView = {
+            ...labOrder,
+            status: LabOrderStatus.COMPLETED,
+            completedAt: new Date('2026-05-21T09:00:00.000Z'),
+            items: labOrder.items.map((item) => ({
+                ...item,
+                resultValue: '5.2',
+                resultUnit: '10^9/L',
+                resultStatus: LabResultStatus.ENTERED,
+                completedAt: new Date('2026-05-21T08:55:00.000Z'),
+                flag: 'normal',
+            })),
+        };
+        jest.spyOn(
+            LabPrismaRepository.prototype,
+            'findPatientById',
+        ).mockResolvedValue(completedOrder.patient);
+        const listSpy = jest
+            .spyOn(LabPrismaRepository.prototype, 'listLabOrders')
+            .mockResolvedValue({
+                items: [completedOrder],
+                meta: {
+                    page: 1,
+                    limit: 10,
+                    total: 1,
+                    totalPages: 1,
+                },
+            });
+
+        const response = await request(app)
+            .get(`/api/lab-orders?patientId=${patientId}&status=completed`)
+            .set(
+                'Authorization',
+                `Bearer ${createAccessToken(['lab_orders:read:own'], patientUserId)}`,
+            );
+
+        expect(response.status).toBe(200);
+        expect(response.body.items[0].items[0]).toEqual(
+            expect.objectContaining({
+                resultValue: '5.2',
+                flag: 'normal',
+                labTest: expect.objectContaining({
+                    referenceRange: '4.0-10.0',
+                }),
+            }),
+        );
+        expect(listSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                patientId,
+                status: LabOrderStatus.COMPLETED,
+            }),
+        );
+    });
+
     it('returns the AI trigger stub through POST /api/lab-orders/:id/trigger-ai', async () => {
         jest.spyOn(
             LabPrismaRepository.prototype,

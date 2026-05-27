@@ -10,11 +10,14 @@ import { AddMedicalRecordAmendmentHandler } from '../application/handlers/add-me
 import { CreateMedicalRecordHandler } from '../application/handlers/create-medical-record.handler';
 import { FinalizeMedicalRecordHandler } from '../application/handlers/finalize-medical-record.handler';
 import { GetMedicalRecordByIdHandler } from '../application/handlers/get-medical-record-by-id.handler';
+import { GetMedicalRecordPdfHandler } from '../application/handlers/get-medical-record-pdf.handler';
 import { ListMedicalRecordsHandler } from '../application/handlers/list-medical-records.handler';
 import { UpdateMedicalRecordHandler } from '../application/handlers/update-medical-record.handler';
 import { GetMedicalRecordByIdQuery } from '../application/queries/get-medical-record-by-id.query';
+import { GetMedicalRecordPdfQuery } from '../application/queries/get-medical-record-pdf.query';
 import { ListMedicalRecordsQuery } from '../application/queries/list-medical-records.query';
 import { MedicalRecordPrismaRepository } from '../infrastructure/medical-record.prisma.repository';
+import { MedicalRecordPdfService } from '../services/medical-record-pdf.service';
 import { MedicalRecordService } from '../services/medical-record.service';
 
 const idParamsSchema = z.object({
@@ -54,6 +57,10 @@ const listMedicalRecordsQuerySchema = z.object({
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(10),
     patientId: z.string().uuid('Invalid patient id').optional(),
+    isFinalized: z
+        .enum(['true', 'false'])
+        .transform((value) => value === 'true')
+        .optional(),
 });
 
 function hasPermission(req: Request, permission: string, scope?: string) {
@@ -75,6 +82,7 @@ function hasPermission(req: Request, permission: string, scope?: string) {
 export class MedicalRecordController {
     private readonly commandBus = new CommandBus();
     private readonly queryBus = new QueryBus();
+    private readonly pdfService = new MedicalRecordPdfService();
     private readonly service = new MedicalRecordService(
         new MedicalRecordPrismaRepository(),
     );
@@ -94,6 +102,10 @@ export class MedicalRecordController {
     );
     private readonly getMedicalRecordByIdHandler = new GetMedicalRecordByIdHandler(
         this.service,
+    );
+    private readonly getMedicalRecordPdfHandler = new GetMedicalRecordPdfHandler(
+        this.service,
+        this.pdfService,
     );
 
     async create(req: Request, res: Response) {
@@ -125,6 +137,7 @@ export class MedicalRecordController {
                 query.page,
                 query.limit,
                 query.patientId,
+                query.isFinalized,
                 req.user?.id,
                 hasPermission(req, 'medical_records:read', 'all'),
             ),
@@ -145,6 +158,26 @@ export class MedicalRecordController {
         );
 
         return res.status(200).json(result);
+    }
+
+    async downloadPdf(req: Request, res: Response) {
+        const params = idParamsSchema.parse(req.params);
+        const pdf = await this.queryBus.execute(
+            this.getMedicalRecordPdfHandler,
+            new GetMedicalRecordPdfQuery(
+                params.id,
+                req.user?.id,
+                hasPermission(req, 'medical_records:read', 'all'),
+            ),
+        );
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename="medical-record-${params.id}.pdf"`,
+        );
+
+        return res.status(200).send(pdf);
     }
 
     async update(req: Request, res: Response) {

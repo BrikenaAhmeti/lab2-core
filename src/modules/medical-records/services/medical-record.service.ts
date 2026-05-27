@@ -70,6 +70,7 @@ export class MedicalRecordService {
             page: number;
             limit: number;
             patientId?: string;
+            isFinalized?: boolean;
         },
         actorUserId?: string,
         canReadAll = false,
@@ -83,6 +84,7 @@ export class MedicalRecordService {
         return this.medicalRecordRepository.list({
             ...filters,
             patientId,
+            isFinalized: canReadAll ? filters.isFinalized : true,
         });
     }
 
@@ -212,6 +214,10 @@ export class MedicalRecordService {
         }
 
         if (record.patient.userId && record.patient.userId === actorUserId) {
+            if (!record.isFinalized) {
+                throw new AppError('Forbidden', 403);
+            }
+
             return;
         }
 

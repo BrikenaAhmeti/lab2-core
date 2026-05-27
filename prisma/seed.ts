@@ -130,6 +130,11 @@ const PERMISSIONS = [
         description: 'Edit billings and record payments across all scopes',
     },
     {
+        name: 'dashboard:read',
+        scope: 'all',
+        description: 'Read dashboard aggregate statistics across all scopes',
+    },
+    {
         name: 'feedback:read',
         scope: 'all',
         description: 'Read feedback submissions across all scopes',

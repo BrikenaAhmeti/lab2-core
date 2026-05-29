@@ -109,6 +109,7 @@ function toPharmacyQueueSummary(
         dispensingItems: queue.dispensingItems.map((item) => ({
             id: item.id,
             prescriptionItemId: item.prescriptionItemId,
+            inventoryItemId: item.inventoryItemId,
             quantityToDispense: item.quantityToDispense,
             quantityDispensed: item.quantityDispensed,
             status: item.status,
@@ -161,39 +162,61 @@ export class PrescriptionPrismaRepository implements PrescriptionRepository {
     async createWithPharmacyQueue(
         data: CreatePrescriptionData,
     ): Promise<PrescriptionView> {
-        const prescription = await prisma.prescription.create({
-            data: {
-                patientId: data.patientId,
-                medicalRecordId: data.medicalRecordId,
-                appointmentId: data.appointmentId ?? null,
-                staffProfileId: data.staffProfileId,
-                expiresAt: data.expiresAt ?? null,
-                notes: data.notes ?? null,
-                createdBy: data.actorUserId,
-                updatedBy: data.actorUserId,
-                items: {
-                    create: data.items.map((item) => ({
-                        medicationName: item.medicationName,
-                        dosage: item.dosage,
-                        frequency: item.frequency,
-                        durationInstructions: item.durationInstructions ?? null,
-                        quantityPrescribed: item.quantityPrescribed,
-                        notes: item.notes ?? null,
-                        createdBy: data.actorUserId,
-                        updatedBy: data.actorUserId,
-                    })),
-                },
-                pharmacyQueue: {
-                    create: [
-                        {
-                            patientId: data.patientId,
+        const prescription = await prisma.$transaction(async (tx) => {
+            const createdPrescription = await tx.prescription.create({
+                data: {
+                    patientId: data.patientId,
+                    medicalRecordId: data.medicalRecordId,
+                    appointmentId: data.appointmentId ?? null,
+                    staffProfileId: data.staffProfileId,
+                    expiresAt: data.expiresAt ?? null,
+                    notes: data.notes ?? null,
+                    createdBy: data.actorUserId,
+                    updatedBy: data.actorUserId,
+                    items: {
+                        create: data.items.map((item) => ({
+                            medicationName: item.medicationName,
+                            dosage: item.dosage,
+                            frequency: item.frequency,
+                            durationInstructions: item.durationInstructions ?? null,
+                            quantityPrescribed: item.quantityPrescribed,
+                            notes: item.notes ?? null,
                             createdBy: data.actorUserId,
                             updatedBy: data.actorUserId,
-                        },
-                    ],
+                        })),
+                    },
                 },
-            },
-            include: prescriptionInclude,
+                include: {
+                    items: {
+                        select: {
+                            id: true,
+                            quantityPrescribed: true,
+                        },
+                    },
+                },
+            });
+
+            await tx.pharmacyQueue.create({
+                data: {
+                    prescriptionId: createdPrescription.id,
+                    patientId: data.patientId,
+                    createdBy: data.actorUserId,
+                    updatedBy: data.actorUserId,
+                    dispensingItems: {
+                        create: createdPrescription.items.map((item) => ({
+                            prescriptionItemId: item.id,
+                            quantityToDispense: item.quantityPrescribed,
+                            createdBy: data.actorUserId,
+                            updatedBy: data.actorUserId,
+                        })),
+                    },
+                },
+            });
+
+            return tx.prescription.findUniqueOrThrow({
+                where: { id: createdPrescription.id },
+                include: prescriptionInclude,
+            });
         });
 
         return toPrescriptionView(prescription);
@@ -305,8 +328,12 @@ export class PrescriptionPrismaRepository implements PrescriptionRepository {
 
     async hasDispensingActivity(id: string): Promise<boolean> {
         const activeStatuses = [
+            PharmacyStatus.IN_PROGRESS,
             PharmacyStatus.PARTIALLY_DISPENSED,
             PharmacyStatus.DISPENSED,
+            PharmacyStatus.FULFILLED,
+            PharmacyStatus.OUT_OF_STOCK,
+            PharmacyStatus.SUBSTITUTED,
         ];
 
         const [queueCount, dispensingItemCount] = await prisma.$transaction([
@@ -354,8 +381,12 @@ export class PrescriptionPrismaRepository implements PrescriptionRepository {
                     prescriptionId: id,
                     status: {
                         notIn: [
+                            PharmacyStatus.IN_PROGRESS,
                             PharmacyStatus.PARTIALLY_DISPENSED,
                             PharmacyStatus.DISPENSED,
+                            PharmacyStatus.FULFILLED,
+                            PharmacyStatus.OUT_OF_STOCK,
+                            PharmacyStatus.SUBSTITUTED,
                         ],
                     },
                 },

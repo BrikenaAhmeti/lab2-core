@@ -60,6 +60,7 @@ export interface PrescriptionPharmacyQueueSummary {
     dispensingItems: Array<{
         id: string;
         prescriptionItemId: string;
+        inventoryItemId: string | null;
         quantityToDispense: number;
         quantityDispensed: number | null;
         status: PharmacyStatus;

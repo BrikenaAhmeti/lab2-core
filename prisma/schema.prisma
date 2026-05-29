@@ -61,9 +61,13 @@ enum LabOrderStatus {
 
 enum PharmacyStatus {
   PENDING
+  IN_PROGRESS
   ON_HOLD
   PARTIALLY_DISPENSED
   DISPENSED
+  FULFILLED
+  OUT_OF_STOCK
+  SUBSTITUTED
   CANCELLED
 }
 
@@ -551,6 +555,7 @@ model PharmacyDispensingItem {
   id                 String         @id @default(uuid())
   pharmacyQueueId    String         @map("pharmacy_queue_id")
   prescriptionItemId String         @map("prescription_item_id")
+  inventoryItemId    String?        @map("inventory_item_id")
   quantityToDispense Int            @map("quantity_to_dispense")
   quantityDispensed  Int?           @map("quantity_dispensed")
   status             PharmacyStatus @default(PENDING)
@@ -561,8 +566,10 @@ model PharmacyDispensingItem {
   updatedBy          String?        @db.Uuid @map("updated_by")
   pharmacyQueue      PharmacyQueue  @relation(fields: [pharmacyQueueId], references: [id], onDelete: Cascade)
   prescriptionItem   PrescriptionItem @relation(fields: [prescriptionItemId], references: [id], onDelete: Restrict)
+  inventoryItem      InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
 
   @@unique([pharmacyQueueId, prescriptionItemId])
+  @@index([inventoryItemId])
   @@index([status])
   @@map("pharmacy_dispensing_items")
 }
@@ -605,6 +612,7 @@ model InventoryItem {
   updatedBy              String?                @db.Uuid @map("updated_by")
   inventoryCategory      InventoryCategory      @relation(fields: [inventoryCategoryId], references: [id], onDelete: Restrict)
   department             Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  dispensingItems        PharmacyDispensingItem[]
   transactions           InventoryTransaction[]
   billingItems           BillingItem[]
 

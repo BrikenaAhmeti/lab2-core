@@ -130,6 +130,16 @@ const PERMISSIONS = [
         description: 'Create, update, and adjust inventory across all scopes',
     },
     {
+        name: 'pharmacy:read',
+        scope: 'all',
+        description: 'Read pharmacy queue and dispensing details across all scopes',
+    },
+    {
+        name: 'pharmacy:dispense',
+        scope: 'all',
+        description: 'Start, dispense, and fulfill pharmacy queue items across all scopes',
+    },
+    {
         name: 'billing:read',
         scope: 'all',
         description: 'Read billing records and billing stats across all scopes',

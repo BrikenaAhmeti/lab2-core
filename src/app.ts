@@ -31,6 +31,10 @@ import { contactRoutes } from './modules/contact/presentation/contact.routes';
 import { dashboardRoutes } from './modules/dashboard/presentation/dashboard.routes';
 import { reportsRoutes } from './modules/reports/presentation/reports.routes';
 import { searchRoutes } from './modules/search/presentation/search.routes';
+import {
+    dataExportRoutes,
+    dataImportRoutes,
+} from './modules/data-exchange/presentation/data-exchange.routes';
 import { swaggerSpec } from './docs/swagger';
 
 /**
@@ -75,7 +79,7 @@ export function createApp() {
     );
     app.use(requestContext);
     app.use(requestLogger);
-    app.use(express.json());
+    app.use(express.json({ limit: '10mb' }));
     app.use(auditLogger);
 
     app.get('/health', (_req, res) => {
@@ -101,6 +105,8 @@ export function createApp() {
     app.use('/api/dashboard', dashboardRoutes);
     app.use('/api/reports', reportsRoutes);
     app.use('/api/search', searchRoutes);
+    app.use('/api/export', dataExportRoutes);
+    app.use('/api/import', dataImportRoutes);
     app.use('/api/feedback', feedbackRoutes);
     app.use('/api/contact', contactRoutes);
     app.use('/api/settings', settingRoutes);

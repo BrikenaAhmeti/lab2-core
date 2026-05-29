@@ -120,6 +120,16 @@ const PERMISSIONS = [
         description: 'Review and release lab results across all scopes',
     },
     {
+        name: 'inventory:read',
+        scope: 'all',
+        description: 'Read inventory items and stock status across all scopes',
+    },
+    {
+        name: 'inventory:manage',
+        scope: 'all',
+        description: 'Create, update, and adjust inventory across all scopes',
+    },
+    {
         name: 'billing:read',
         scope: 'all',
         description: 'Read billing records and billing stats across all scopes',
@@ -153,6 +163,16 @@ const PERMISSIONS = [
         name: 'contact:manage',
         scope: 'all',
         description: 'Manage contact form submission statuses across all scopes',
+    },
+    {
+        name: 'audit_logs:read',
+        scope: 'all',
+        description: 'Read audit log history across all scopes',
+    },
+    {
+        name: 'reports:generate',
+        scope: 'all',
+        description: 'Generate operational reports across all scopes',
     },
     {
         name: 'settings:read',

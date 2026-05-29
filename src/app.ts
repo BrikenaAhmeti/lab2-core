@@ -30,6 +30,7 @@ import { feedbackRoutes } from './modules/feedback/presentation/feedback.routes'
 import { contactRoutes } from './modules/contact/presentation/contact.routes';
 import { dashboardRoutes } from './modules/dashboard/presentation/dashboard.routes';
 import { reportsRoutes } from './modules/reports/presentation/reports.routes';
+import { searchRoutes } from './modules/search/presentation/search.routes';
 import { swaggerSpec } from './docs/swagger';
 
 /**
@@ -99,6 +100,7 @@ export function createApp() {
     app.use('/api/billings', billingRoutes);
     app.use('/api/dashboard', dashboardRoutes);
     app.use('/api/reports', reportsRoutes);
+    app.use('/api/search', searchRoutes);
     app.use('/api/feedback', feedbackRoutes);
     app.use('/api/contact', contactRoutes);
     app.use('/api/settings', settingRoutes);

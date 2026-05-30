@@ -31,6 +31,11 @@ Copy `.env.example` and provide:
 - `DATABASE_URL`
 - `JWT_ACCESS_SECRET`
 - `FRONTEND_ORIGINS`
+- `REDIS_URL` for distributed appointment slot locks; without it the service falls back to in-memory locks
+- `MONGODB_URI` for report template persistence; without it report templates are kept in memory
+- `INTERNAL_API_KEY` for internal endpoints and notification-service calls
+- `NOTIFICATION_SERVICE_URL` if notification delivery should be enabled
+- `SENTRY_DSN` if backend error tracking should be enabled
 
 ## Scripts
 
@@ -118,16 +123,13 @@ Permission checks stay compatible with the auth service and support:
 ## Endpoints
 
 - `GET /health`
-- `GET /api/docs`
-- `GET /api/docs.json`
-- `POST /api/departments`
-- `GET /api/departments`
-- `GET /api/departments/:id`
-- `PATCH /api/departments/:id`
-- `DELETE /api/departments/:id`
+- Swagger UI: `GET /api/docs`
+- OpenAPI JSON: `GET /api/docs.json`
+- The OpenAPI document covers the current Core Service routes for departments, services, staff, schedules, patients, appointments, medical records, prescriptions, lab, billing, pharmacy, dashboard, reports, search, data exchange, feedback, contact, settings, audit logs, and internal appointment reminders.
 
 ## Notes
 
 - Deletes are soft deletes implemented as deactivation.
 - Department names are normalized before save and checked for duplicates case-insensitively.
 - `ServicePermission` is a lightweight local catalog so this service can seed only its own permission definitions without pulling auth business logic into the module layer.
+- This service does not call OpenAI directly and does not require `OPENAI_API_KEY`. The current lab AI endpoint returns a `not_configured` stub; production AI work should live behind the separate AI Service described in the project docs.

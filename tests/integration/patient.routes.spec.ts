@@ -5,6 +5,7 @@ process.env.NODE_ENV = 'test';
 process.env.JWT_ACCESS_SECRET = 'patient-routes-test-secret';
 process.env.PATIENT_DATA_ENCRYPTION_KEY = 'patient-routes-test-key';
 process.env.FRONTEND_ORIGINS = '';
+process.env.INTERNAL_API_KEY = 'patient-routes-internal-key';
 
 const { createApp } = require('../../src/app');
 const {
@@ -182,6 +183,57 @@ describe('Patient routes', () => {
         expect(response.status).toBe(200);
         expect(response.body).toHaveLength(1);
         expect(response.body[0].type).toBe('appointment');
+    });
+
+    it('links an existing unlinked patient from the internal auth handoff', async () => {
+        const linkedUserId = '15e1a6c6-998a-4d47-a1de-a55859e958cc';
+        jest.spyOn(PatientPrismaRepository.prototype, 'findByUserId').mockResolvedValue(
+            null,
+        );
+        jest.spyOn(
+            PatientPrismaRepository.prototype,
+            'findByPersonalNumberHash',
+        ).mockResolvedValue({
+            ...patient,
+            userId: null,
+        });
+        const updateSpy = jest
+            .spyOn(PatientPrismaRepository.prototype, 'update')
+            .mockResolvedValue({
+                ...patient,
+                userId: linkedUserId,
+            });
+
+        const response = await request(app)
+            .post('/internal/patients/link-by-personal-number')
+            .set('x-internal-api-key', process.env.INTERNAL_API_KEY as string)
+            .send({
+                userId: linkedUserId,
+                personalNumber: ' 1234567890 ',
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({
+            linked: true,
+            patientId: patient.id,
+            userId: linkedUserId,
+        });
+        expect(updateSpy).toHaveBeenCalledWith(patient.id, {
+            userId: linkedUserId,
+            actorUserId: linkedUserId,
+        });
+    });
+
+    it('protects the internal patient linking endpoint with the internal API key', async () => {
+        const response = await request(app)
+            .post('/internal/patients/link-by-personal-number')
+            .send({
+                userId: '15e1a6c6-998a-4d47-a1de-a55859e958cc',
+                personalNumber: '1234567890',
+            });
+
+        expect(response.status).toBe(401);
+        expect(response.body.message).toBe('Invalid internal API key');
     });
 
     it('rejects unauthorized list requests', async () => {

@@ -31,6 +31,12 @@ export interface PatientListResult {
     };
 }
 
+export interface LinkPatientByPersonalNumberResult {
+    linked: boolean;
+    patientId: string | null;
+    userId: string;
+}
+
 export type PatientTimelineType =
     | 'appointment'
     | 'medical_record'

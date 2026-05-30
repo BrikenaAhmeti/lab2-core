@@ -599,6 +599,21 @@ const schemas = {
         medicalNotes: { type: 'object', nullable: true, additionalProperties: true },
         isActive: { type: 'boolean' },
     }),
+    LinkPatientByPersonalNumberRequest: objectSchema(
+        {
+            userId: uuid,
+            personalNumber: { type: 'string' },
+        },
+        ['userId', 'personalNumber'],
+    ),
+    LinkPatientByPersonalNumberResponse: objectSchema(
+        {
+            linked: { type: 'boolean' },
+            patientId: nullableUuid,
+            userId: uuid,
+        },
+        ['linked', 'patientId', 'userId'],
+    ),
     PatientTimelineResponse: objectSchema({
         patient: ref('Patient'),
         appointments: arrayOf(ref('Appointment')),
@@ -1706,6 +1721,23 @@ const paths = {
             },
         }),
     },
+    '/internal/patients/link-by-personal-number': {
+        post: operation({
+            tags: ['Internal Patients'],
+            summary: 'Link an existing patient profile by personal number',
+            security: [{ internalApiKey: [] }],
+            requestBody: jsonRequest(ref('LinkPatientByPersonalNumberRequest')),
+            responses: {
+                200: jsonResponse(
+                    'Patient link result',
+                    ref('LinkPatientByPersonalNumberResponse'),
+                ),
+                400: errorResponse('Validation failed'),
+                401: errorResponse('Invalid internal API key'),
+                409: errorResponse('Patient link conflict'),
+            },
+        }),
+    },
 
     '/api/appointments': {
         get: operation({
@@ -2751,6 +2783,7 @@ export const swaggerSpec = {
         { name: 'Contact' },
         { name: 'Settings' },
         { name: 'Audit Logs' },
+        { name: 'Internal Patients' },
     ],
     paths,
     components: {

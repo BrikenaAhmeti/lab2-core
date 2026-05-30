@@ -230,6 +230,68 @@ export class PatientService {
         return this.patientRepository.getTimeline(patientId);
     }
 
+    async linkByPersonalNumber(userId: string, rawPersonalNumber: string) {
+        const personalNumber = normalizePersonalNumber(rawPersonalNumber);
+        const personalNumberHash = hashPersonalNumber(personalNumber);
+
+        if (!personalNumberHash) {
+            throw new AppError('Personal number is required', 400);
+        }
+
+        const [existingUserPatient, existingPersonalNumberPatient] =
+            await Promise.all([
+                this.patientRepository.findByUserId(userId),
+                this.patientRepository.findByPersonalNumberHash(personalNumberHash),
+            ]);
+
+        if (!existingPersonalNumberPatient) {
+            return {
+                linked: false,
+                patientId: null,
+                userId,
+            };
+        }
+
+        if (
+            existingUserPatient &&
+            existingUserPatient.id !== existingPersonalNumberPatient.id
+        ) {
+            throw new AppError('Patient profile already exists for this user', 409);
+        }
+
+        if (
+            existingPersonalNumberPatient.userId &&
+            existingPersonalNumberPatient.userId !== userId
+        ) {
+            throw new AppError(
+                'Patient personal number already linked to another user',
+                409,
+            );
+        }
+
+        if (existingPersonalNumberPatient.userId === userId) {
+            return {
+                linked: false,
+                patientId: existingPersonalNumberPatient.id,
+                userId,
+            };
+        }
+
+        const linkedPatient = await this.patientRepository.update(
+            existingPersonalNumberPatient.id,
+            {
+                userId,
+                actorUserId: userId,
+            },
+        );
+
+        return {
+            linked: true,
+            patientId: linkedPatient.id,
+            userId,
+        };
+    }
+
     decryptPersonalNumber(value: string | null) {
         return decryptPersonalNumber(value);
     }

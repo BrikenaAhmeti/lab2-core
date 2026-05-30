@@ -116,4 +116,72 @@ describe('PatientService', () => {
             statusCode: 403,
         });
     });
+
+    it('links an unlinked patient profile by personal number', async () => {
+        const repository = createRepositoryMock();
+        const unlinkedPatient = {
+            ...patient,
+            userId: null,
+        };
+        const linkedUserId = '15e1a6c6-998a-4d47-a1de-a55859e958cc';
+        repository.findByUserId.mockResolvedValue(null);
+        repository.findByPersonalNumberHash.mockResolvedValue(unlinkedPatient);
+        repository.update.mockResolvedValue({
+            ...unlinkedPatient,
+            userId: linkedUserId,
+        });
+        const service = new PatientService(repository);
+
+        const result = await service.linkByPersonalNumber(
+            linkedUserId,
+            ' 1234567890 ',
+        );
+
+        expect(result).toEqual({
+            linked: true,
+            patientId: patient.id,
+            userId: linkedUserId,
+        });
+        expect(repository.update).toHaveBeenCalledWith(patient.id, {
+            userId: linkedUserId,
+            actorUserId: linkedUserId,
+        });
+    });
+
+    it('returns an empty link result when no profile matches the personal number', async () => {
+        const repository = createRepositoryMock();
+        const linkedUserId = '15e1a6c6-998a-4d47-a1de-a55859e958cc';
+        repository.findByUserId.mockResolvedValue(null);
+        repository.findByPersonalNumberHash.mockResolvedValue(null);
+        const service = new PatientService(repository);
+
+        const result = await service.linkByPersonalNumber(
+            linkedUserId,
+            '1234567890',
+        );
+
+        expect(result).toEqual({
+            linked: false,
+            patientId: null,
+            userId: linkedUserId,
+        });
+        expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects linking a personal number already attached to another user', async () => {
+        const repository = createRepositoryMock();
+        repository.findByUserId.mockResolvedValue(null);
+        repository.findByPersonalNumberHash.mockResolvedValue(patient);
+        const service = new PatientService(repository);
+
+        await expect(
+            service.linkByPersonalNumber(
+                '15e1a6c6-998a-4d47-a1de-a55859e958cc',
+                patient.personalNumber as string,
+            ),
+        ).rejects.toMatchObject({
+            message: 'Patient personal number already linked to another user',
+            statusCode: 409,
+        });
+    });
 });

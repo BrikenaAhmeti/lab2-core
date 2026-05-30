@@ -4,10 +4,12 @@ import { BloodType } from '../../../generated/prisma';
 import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
 import { CreatePatientCommand } from '../application/commands/create-patient.command';
+import { LinkPatientByPersonalNumberCommand } from '../application/commands/link-patient-by-personal-number.command';
 import { UpdatePatientCommand } from '../application/commands/update-patient.command';
 import { CreatePatientHandler } from '../application/handlers/create-patient.handler';
 import { GetPatientByIdHandler } from '../application/handlers/get-patient-by-id.handler';
 import { GetPatientTimelineHandler } from '../application/handlers/get-patient-timeline.handler';
+import { LinkPatientByPersonalNumberHandler } from '../application/handlers/link-patient-by-personal-number.handler';
 import { ListPatientsHandler } from '../application/handlers/list-patients.handler';
 import { UpdatePatientHandler } from '../application/handlers/update-patient.handler';
 import { GetPatientByIdQuery } from '../application/queries/get-patient-by-id.query';
@@ -74,6 +76,15 @@ const listPatientsQuerySchema = z.object({
     bloodType: bloodTypeSchema.optional(),
 });
 
+const linkByPersonalNumberSchema = z.object({
+    userId: z.string().uuid('Invalid user id'),
+    personalNumber: z
+        .string()
+        .trim()
+        .min(1, 'Personal number is required')
+        .max(120, 'Personal number must be at most 120 characters'),
+});
+
 function hasPermission(req: Request, permission: string) {
     const permissions = req.user?.permissions ?? [];
 
@@ -98,6 +109,8 @@ export class PatientController {
     private readonly getPatientTimelineHandler = new GetPatientTimelineHandler(
         this.service,
     );
+    private readonly linkPatientByPersonalNumberHandler =
+        new LinkPatientByPersonalNumberHandler(this.service);
 
     async create(req: Request, res: Response) {
         const body = createPatientSchema.parse(req.body);
@@ -201,6 +214,20 @@ export class PatientController {
         const result = await this.queryBus.execute(
             this.getPatientTimelineHandler,
             query,
+        );
+
+        return res.status(200).json(result);
+    }
+
+    async linkByPersonalNumber(req: Request, res: Response) {
+        const body = linkByPersonalNumberSchema.parse(req.body);
+        const command = new LinkPatientByPersonalNumberCommand(
+            body.userId,
+            body.personalNumber,
+        );
+        const result = await this.commandBus.execute(
+            this.linkPatientByPersonalNumberHandler,
+            command,
         );
 
         return res.status(200).json(result);

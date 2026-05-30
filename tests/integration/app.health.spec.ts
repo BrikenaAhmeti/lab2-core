@@ -24,6 +24,9 @@ describe('App health route', () => {
         expect(response.body.paths['/api/lab-orders/{id}/trigger-ai']).toBeDefined();
         expect(response.body.paths['/api/import/{entity}']).toBeDefined();
         expect(response.body.paths['/internal/appointments/reminders']).toBeDefined();
+        expect(
+            response.body.paths['/internal/patients/link-by-personal-number'],
+        ).toBeDefined();
         expect(response.body.components.securitySchemes.bearerAuth).toBeDefined();
         expect(response.body.components.securitySchemes.internalApiKey).toBeDefined();
     });

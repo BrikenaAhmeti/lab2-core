@@ -27,6 +27,7 @@ import {
 } from './modules/lab/presentation/lab.routes';
 import { billingRoutes } from './modules/billing/presentation/billing.routes';
 import { pharmacyRoutes } from './modules/pharmacy/presentation/pharmacy.routes';
+import { inventoryRoutes } from './modules/inventory/presentation/inventory.routes';
 import { feedbackRoutes } from './modules/feedback/presentation/feedback.routes';
 import { contactRoutes } from './modules/contact/presentation/contact.routes';
 import { dashboardRoutes } from './modules/dashboard/presentation/dashboard.routes';
@@ -104,6 +105,7 @@ export function createApp() {
     app.use('/api/lab-orders', labOrderRoutes);
     app.use('/api/billings', billingRoutes);
     app.use('/api/pharmacy', pharmacyRoutes);
+    app.use('/api/inventory', inventoryRoutes);
     app.use('/api/dashboard', dashboardRoutes);
     app.use('/api/reports', reportsRoutes);
     app.use('/api/search', searchRoutes);

@@ -75,10 +75,10 @@ const appointment = {
     department,
 };
 
-function createAccessToken(permissions: string[]) {
+function createAccessToken(permissions: string[], subject = '9dbd7a27-0b3c-4939-8a2f-1f20fd1ef6ee') {
     return jwt.sign(
         {
-            sub: '9dbd7a27-0b3c-4939-8a2f-1f20fd1ef6ee',
+            sub: subject,
             email: 'admin@medsphere.local',
             roles: ['Admin'],
             permissions,
@@ -136,6 +136,12 @@ describe('Appointment routes', () => {
 
     it('books an appointment through POST /api/appointments', async () => {
         jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById').mockResolvedValue(patient);
+        const findPatientByUserIdSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'findPatientByUserId')
+            .mockResolvedValue(patient);
+        const findPatientByIdOrUserIdSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'findPatientByIdOrUserId')
+            .mockResolvedValue(patient);
         jest.spyOn(AppointmentPrismaRepository.prototype, 'findServiceById').mockResolvedValue({
             id: serviceId,
             departmentId,
@@ -159,6 +165,20 @@ describe('Appointment routes', () => {
                 },
             ],
         });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffByIdOrUserId').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
         jest
             .spyOn(AppointmentPrismaRepository.prototype, 'countConflictingAppointments')
             .mockResolvedValue(0);
@@ -167,9 +187,8 @@ describe('Appointment routes', () => {
 
         const response = await request(app)
             .post('/api/appointments')
-            .set('Authorization', `Bearer ${createAccessToken(['appointments:create:all'])}`)
+            .set('Authorization', `Bearer ${createAccessToken(['appointments:create:all'], patient.userId!)}`)
             .send({
-                patientId,
                 serviceCatalogId: serviceId,
                 staffProfileId,
                 scheduledAt: scheduledAt.toISOString(),
@@ -187,6 +206,189 @@ describe('Appointment routes', () => {
                 notes: 'New patient',
             }),
         );
+        expect(findPatientByUserIdSpy).toHaveBeenCalledWith(patient.userId);
+        expect(findPatientByIdOrUserIdSpy).not.toHaveBeenCalled();
+    });
+
+    it('books an appointment with the mobile payload', async () => {
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById').mockResolvedValue(patient);
+        const findPatientByUserIdSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'findPatientByUserId')
+            .mockResolvedValue(patient);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findDefaultServiceForStaff').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffByIdOrUserId').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'countConflictingAppointments')
+            .mockResolvedValue(0);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'create').mockResolvedValue({
+            ...appointment,
+            notes: 'General consultation',
+        });
+        mockAvailabilityDependencies();
+
+        const response = await request(app)
+            .post('/api/appointments')
+            .set('Authorization', `Bearer ${createAccessToken([], patient.userId!)}`)
+            .send({
+                doctorId: appointment.staff!.userId,
+                date: scheduledAt.toISOString(),
+                reason: 'General consultation',
+            });
+
+        expect(response.status).toBe(201);
+        expect(response.body.id).toBe(appointmentId);
+        expect(response.body.doctorId).toBe(staffProfileId);
+        expect(response.body.reason).toBe('General consultation');
+        expect(AppointmentPrismaRepository.prototype.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                patientId,
+                serviceCatalogId: serviceId,
+                staffProfileId,
+                notes: 'General consultation',
+            }),
+        );
+        expect(findPatientByUserIdSpy).toHaveBeenCalledWith(patient.userId);
+    });
+
+    it('ignores patientId in the booking body and uses the authenticated patient', async () => {
+        const findPatientByUserIdSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'findPatientByUserId')
+            .mockResolvedValue(patient);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById').mockResolvedValue(patient);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findDefaultServiceForStaff').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffByIdOrUserId').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'countConflictingAppointments')
+            .mockResolvedValue(0);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'create').mockResolvedValue(appointment);
+        mockAvailabilityDependencies();
+
+        const response = await request(app)
+            .post('/api/appointments')
+            .set('Authorization', `Bearer ${createAccessToken([], patient.userId!)}`)
+            .send({
+                patientId: '11111111-1111-4111-8111-111111111111',
+                doctorId: appointment.staff!.userId,
+                date: scheduledAt.toISOString(),
+                reason: 'General consultation',
+            });
+
+        expect(response.status).toBe(201);
+        expect(findPatientByUserIdSpy).toHaveBeenCalledWith(patient.userId);
+        expect(AppointmentPrismaRepository.prototype.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                patientId,
+            }),
+        );
+    });
+
+    it('returns 404 when the authenticated user has no active patient', async () => {
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientByUserId')
+            .mockResolvedValue(null);
+        const createSpy = jest.spyOn(AppointmentPrismaRepository.prototype, 'create');
+
+        const response = await request(app)
+            .post('/api/appointments')
+            .set('Authorization', `Bearer ${createAccessToken([], patient.userId!)}`)
+            .send({
+                doctorId: appointment.staff!.userId,
+                date: scheduledAt.toISOString(),
+                reason: 'General consultation',
+            });
+
+        expect(response.status).toBe(404);
+        expect(response.body.message).toBe('Patient not found or inactive');
+        expect(AppointmentPrismaRepository.prototype.findPatientByUserId)
+            .toHaveBeenCalledWith(patient.userId);
+        expect(createSpy).not.toHaveBeenCalled();
     });
 
     it('lists appointments with filters', async () => {
@@ -245,6 +447,73 @@ describe('Appointment routes', () => {
                 limit: 3,
                 patientId,
                 from: new Date('2030-01-01T00:00:00.000Z'),
+            }),
+        );
+    });
+
+    it('lists appointments for the authenticated patient through GET /api/appointments/my', async () => {
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientByIdOrUserId').mockResolvedValue(patient);
+        const listSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'list')
+            .mockResolvedValue({
+                items: [appointment],
+                meta: {
+                    page: 1,
+                    limit: 100,
+                    total: 1,
+                    totalPages: 1,
+                },
+            });
+
+        const response = await request(app)
+            .get('/api/appointments/my')
+            .set('Authorization', `Bearer ${createAccessToken([], patient.userId!)}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0].doctor).toEqual(expect.objectContaining({
+            id: staffProfileId,
+            specialty: 'Cardiologist',
+        }));
+        expect(listSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                patientId,
+                limit: 100,
+            }),
+        );
+    });
+
+    it('lists appointments for the authenticated doctor through GET /api/appointments/doctor/my', async () => {
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffByIdOrUserId').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [],
+        });
+        const listSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'list')
+            .mockResolvedValue({
+                items: [appointment],
+                meta: {
+                    page: 1,
+                    limit: 100,
+                    total: 1,
+                    totalPages: 1,
+                },
+            });
+
+        const response = await request(app)
+            .get('/api/appointments/doctor/my')
+            .set('Authorization', `Bearer ${createAccessToken([], appointment.staff!.userId)}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.items).toHaveLength(1);
+        expect(listSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                staffId: staffProfileId,
+                limit: 100,
             }),
         );
     });

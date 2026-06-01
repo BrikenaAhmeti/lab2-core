@@ -34,6 +34,7 @@ export interface ListStaffProfilesFilters {
     status?: EmploymentStatus;
     search?: string;
     publicOnly?: boolean;
+    roleKey?: string;
 }
 
 export interface UpdateStaffProfileData {

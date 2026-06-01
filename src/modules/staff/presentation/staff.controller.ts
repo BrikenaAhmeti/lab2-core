@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { EmploymentStatus } from '../../../generated/prisma';
 import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
+import { AppointmentPrismaRepository } from '../../appointments/infrastructure/appointment.prisma.repository';
+import { createAppointmentSlotLockRepository } from '../../appointments/infrastructure/appointment-slot-lock.repository';
+import { dateOnlyToUtcDate } from '../../schedules/domain/slot-generator';
+import { SchedulePrismaRepository } from '../../schedules/infrastructure/schedule.prisma.repository';
+import { ScheduleService } from '../../schedules/services/schedule.service';
 import { AddStaffDepartmentCommand } from '../application/commands/add-staff-department.command';
 import { CreateStaffProfileCommand } from '../application/commands/create-staff-profile.command';
 import { DeactivateStaffProfileCommand } from '../application/commands/deactivate-staff-profile.command';
@@ -35,9 +40,20 @@ const idParamsSchema = z.object({
     id: z.string().uuid('Invalid staff profile id'),
 });
 
+const doctorIdParamsSchema = z.object({
+    doctorId: z.string().uuid('Invalid doctor id'),
+});
+
 const departmentStaffParamsSchema = z.object({
     id: z.string().uuid('Invalid department id'),
 });
+
+const dateOnlySchema = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must use YYYY-MM-DD format')
+    .refine((value) => dateOnlyToUtcDate(value).toISOString().slice(0, 10) === value, {
+        message: 'Invalid date',
+    });
 
 const departmentAssignmentSchema = z.object({
     departmentId: z.string().uuid('Invalid department id'),
@@ -107,6 +123,10 @@ const listDepartmentStaffQuerySchema = z.object({
     search: z.string().trim().max(120).optional(),
 });
 
+const doctorAvailableSlotsQuerySchema = z.object({
+    date: dateOnlySchema,
+});
+
 function toEmploymentStatus(value?: z.infer<typeof employmentStatusSchema>) {
     return value as EmploymentStatus | undefined;
 }
@@ -124,9 +144,36 @@ function toDepartmentAssignments(
     }));
 }
 
+function toBookableDoctor(staffProfile: Awaited<ReturnType<StaffService['listBookableDoctors']>>['items'][number]) {
+    const name = staffProfile.specialization
+        ? `${staffProfile.employeeCode} - ${staffProfile.specialization}`
+        : staffProfile.employeeCode;
+
+    return {
+        id: staffProfile.id,
+        _id: staffProfile.id,
+        userId: staffProfile.userId,
+        name,
+        fullName: name,
+        specialty: staffProfile.specialization,
+        specialization: staffProfile.specialization,
+        employeeCode: staffProfile.employeeCode,
+        departments: staffProfile.departments.map((assignment) => ({
+            id: assignment.department.id,
+            name: assignment.department.name,
+            isPrimary: assignment.isPrimary,
+        })),
+    };
+}
+
 export class StaffController {
     private readonly commandBus = new CommandBus();
     private readonly queryBus = new QueryBus();
+    private readonly appointmentRepository = new AppointmentPrismaRepository();
+    private readonly scheduleService = new ScheduleService(
+        new SchedulePrismaRepository(),
+        createAppointmentSlotLockRepository(),
+    );
     private readonly service = new StaffService(new StaffPrismaRepository());
     private readonly createStaffProfileHandler = new CreateStaffProfileHandler(
         this.service,
@@ -209,6 +256,52 @@ export class StaffController {
         );
 
         return res.status(200).json(result);
+    }
+
+    async listDoctors(req: Request, res: Response) {
+        const queryData = listQuerySchema.parse(req.query);
+        const result = await this.service.listBookableDoctors({
+            page: queryData.page,
+            limit: queryData.limit,
+            departmentId: queryData.departmentId,
+            search: queryData.search,
+        });
+
+        return res.status(200).json({
+            ...result,
+            items: result.items.map(toBookableDoctor),
+        });
+    }
+
+    async getDoctorAvailableSlots(req: Request, res: Response) {
+        const params = doctorIdParamsSchema.parse(req.params);
+        const query = doctorAvailableSlotsQuerySchema.parse(req.query);
+        const service = await this.appointmentRepository.findDefaultServiceForStaff(
+            params.doctorId,
+        );
+
+        if (!service) {
+            return res.status(404).json({
+                message: 'Service not found or inactive',
+            });
+        }
+
+        const result = await this.scheduleService.getAvailableSlots({
+            staffProfileId: params.doctorId,
+            serviceId: service.id,
+            date: query.date,
+        });
+
+        return res.status(200).json({
+            ...result,
+            doctorId: params.doctorId,
+            serviceId: service.id,
+            service: {
+                id: service.id,
+                name: service.name,
+                defaultDurationMinutes: service.defaultDurationMinutes,
+            },
+        });
     }
 
     async listByDepartment(req: Request, res: Response) {

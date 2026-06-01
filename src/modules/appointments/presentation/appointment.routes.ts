@@ -24,10 +24,33 @@ internalAppointmentRoutes.get(
 appointmentRoutes.post(
     '/',
     authMiddleware,
-    requirePermission('appointments:create'),
     async (req, res, next) => {
         try {
             await controller.create(req, res);
+        } catch (error) {
+            next(error);
+        }
+    },
+);
+
+appointmentRoutes.get(
+    '/my',
+    authMiddleware,
+    async (req, res, next) => {
+        try {
+            await controller.my(req, res);
+        } catch (error) {
+            next(error);
+        }
+    },
+);
+
+appointmentRoutes.get(
+    '/doctor/my',
+    authMiddleware,
+    async (req, res, next) => {
+        try {
+            await controller.doctorMy(req, res);
         } catch (error) {
             next(error);
         }
@@ -63,7 +86,6 @@ appointmentRoutes.get(
 appointmentRoutes.get(
     '/:id',
     authMiddleware,
-    requirePermission('appointments:read'),
     async (req, res, next) => {
         try {
             await controller.getById(req, res);
@@ -102,7 +124,6 @@ appointmentRoutes.patch(
 appointmentRoutes.patch(
     '/:id/status',
     authMiddleware,
-    requirePermission('appointments:update'),
     async (req, res, next) => {
         try {
             await controller.updateStatus(req, res);

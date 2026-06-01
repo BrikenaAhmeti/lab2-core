@@ -120,12 +120,16 @@ function buildStaffListWhere(filters: ListStaffProfilesFilters) {
         where.employmentStatus = filters.status;
     }
 
+    if (filters.roleKey) {
+        where.staffPositionType = {
+            defaultRoleKey: filters.roleKey,
+            isActive: true,
+        };
+    }
+
     if (filters.publicOnly) {
         where.isPublicProfile = true;
         where.employmentStatus = 'ACTIVE';
-        where.bio = {
-            not: null,
-        };
     }
 
     if (filters.search) {

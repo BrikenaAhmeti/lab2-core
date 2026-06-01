@@ -89,6 +89,47 @@ describe('Patient routes', () => {
         );
     });
 
+    it('creates the authenticated user patient profile without trusting body userId', async () => {
+        const authUserId = '15e1a6c6-998a-4d47-a1de-a55859e958cc';
+        jest.spyOn(PatientPrismaRepository.prototype, 'findByUserId').mockResolvedValue(
+            null,
+        );
+        jest.spyOn(PatientPrismaRepository.prototype, 'findByEmail').mockResolvedValue(
+            null,
+        );
+        jest.spyOn(
+            PatientPrismaRepository.prototype,
+            'findByPersonalNumberHash',
+        ).mockResolvedValue(null);
+        const createSpy = jest
+            .spyOn(PatientPrismaRepository.prototype, 'create')
+            .mockResolvedValue({
+                ...patient,
+                userId: authUserId,
+                firstName: 'Mobile',
+                lastName: 'Patient',
+                email: 'mobile.patient@example.com',
+            });
+
+        const response = await request(app)
+            .post('/api/patients')
+            .set('Authorization', `Bearer ${createAccessToken([], authUserId)}`)
+            .send({
+                userId: '11111111-1111-4111-8111-111111111111',
+                firstName: 'Mobile',
+                lastName: 'Patient',
+                email: 'mobile.patient@example.com',
+            });
+
+        expect(response.status).toBe(201);
+        expect(createSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: authUserId,
+                actorUserId: authUserId,
+            }),
+        );
+    });
+
     it('lists patients with pagination and filters', async () => {
         const listSpy = jest.spyOn(PatientPrismaRepository.prototype, 'list').mockResolvedValue({
             items: [patient],

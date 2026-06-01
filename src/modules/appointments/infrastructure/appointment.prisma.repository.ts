@@ -234,6 +234,47 @@ export class AppointmentPrismaRepository implements AppointmentRepository {
         return patient ? toPatientSummary(patient) : null;
     }
 
+    async findPatientByUserId(userId: string): Promise<AppointmentPatientSummary | null> {
+        const patient = await prisma.patient.findFirst({
+            where: {
+                userId,
+                isActive: true,
+            },
+            select: {
+                id: true,
+                userId: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+            },
+        });
+
+        return patient ? toPatientSummary(patient) : null;
+    }
+
+    async findPatientByIdOrUserId(id: string): Promise<AppointmentPatientSummary | null> {
+        const patient = await prisma.patient.findFirst({
+            where: {
+                isActive: true,
+                OR: [
+                    { id },
+                    { userId: id },
+                ],
+            },
+            select: {
+                id: true,
+                userId: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+            },
+        });
+
+        return patient ? toPatientSummary(patient) : null;
+    }
+
     async findServiceById(id: string): Promise<AppointmentServiceSummary | null> {
         const service = await prisma.serviceCatalog.findUnique({
             where: { id },
@@ -262,9 +303,109 @@ export class AppointmentPrismaRepository implements AppointmentRepository {
             : null;
     }
 
+    async findDefaultServiceForStaff(staffProfileId: string): Promise<AppointmentServiceSummary | null> {
+        const assignment = await prisma.staffDepartmentAssignment.findFirst({
+            where: {
+                staffProfileId,
+                unassignedAt: null,
+                department: {
+                    isActive: true,
+                    services: {
+                        some: {
+                            isActive: true,
+                        },
+                    },
+                },
+            },
+            orderBy: [{ isPrimary: 'desc' }, { assignedAt: 'asc' }],
+            select: {
+                departmentId: true,
+            },
+        });
+
+        if (!assignment) {
+            return null;
+        }
+
+        const service = await prisma.serviceCatalog.findFirst({
+            where: {
+                departmentId: assignment.departmentId,
+                isActive: true,
+                department: {
+                    isActive: true,
+                },
+            },
+            orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+            select: {
+                id: true,
+                departmentId: true,
+                name: true,
+                defaultDurationMinutes: true,
+                defaultPrice: true,
+                isActive: true,
+                department: {
+                    select: {
+                        id: true,
+                        name: true,
+                        isActive: true,
+                    },
+                },
+            },
+        });
+
+        return service
+            ? {
+                ...service,
+                defaultPrice: decimalToNumber(service.defaultPrice),
+            }
+            : null;
+    }
+
     async findStaffById(id: string): Promise<AppointmentStaffAvailabilitySummary | null> {
         const staff = await prisma.staffProfile.findUnique({
             where: { id },
+            select: {
+                id: true,
+                userId: true,
+                employeeCode: true,
+                specialization: true,
+                employmentStatus: true,
+                departmentAssignments: {
+                    select: {
+                        departmentId: true,
+                        unassignedAt: true,
+                        department: {
+                            select: {
+                                id: true,
+                                name: true,
+                                isActive: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        return staff
+            ? {
+                id: staff.id,
+                userId: staff.userId,
+                employeeCode: staff.employeeCode,
+                specialization: staff.specialization,
+                employmentStatus: staff.employmentStatus,
+                departments: staff.departmentAssignments,
+            }
+            : null;
+    }
+
+    async findStaffByIdOrUserId(id: string): Promise<AppointmentStaffAvailabilitySummary | null> {
+        const staff = await prisma.staffProfile.findFirst({
+            where: {
+                OR: [
+                    { id },
+                    { userId: id },
+                ],
+            },
             select: {
                 id: true,
                 userId: true,

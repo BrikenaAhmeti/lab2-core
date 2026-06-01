@@ -16,6 +16,22 @@ staffRoutes.get('/public', async (req, res, next) => {
     }
 });
 
+staffRoutes.get('/doctors', async (req, res, next) => {
+    try {
+        await controller.listDoctors(req, res);
+    } catch (error) {
+        next(error);
+    }
+});
+
+staffRoutes.get('/doctors/:doctorId/available-slots', async (req, res, next) => {
+    try {
+        await controller.getDoctorAvailableSlots(req, res);
+    } catch (error) {
+        next(error);
+    }
+});
+
 staffRoutes.get(
     '/',
     authMiddleware,

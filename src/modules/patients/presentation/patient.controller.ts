@@ -115,10 +115,11 @@ export class PatientController {
     async create(req: Request, res: Response) {
         const body = createPatientSchema.parse(req.body);
         const canCreateAll = hasPermission(req, 'patients:create');
+        const userId = canCreateAll ? body.userId : req.user?.id;
         const command = new CreatePatientCommand(
             body.firstName,
             body.lastName,
-            body.userId,
+            userId,
             body.email,
             body.phone,
             body.dateOfBirth,

@@ -5,6 +5,7 @@ import {
     AppointmentType,
 } from '../../../generated/prisma';
 import { env } from '../../../config/env';
+import { AppError } from '../../../shared/core/errors/app-error';
 import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
 import { SchedulePrismaRepository } from '../../schedules/infrastructure/schedule.prisma.repository';
@@ -32,6 +33,7 @@ import { createAppointmentSlotLockRepository } from '../infrastructure/appointme
 import { BillingAppointmentEventPublisher } from '../../billing/infrastructure/billing-appointment-event.publisher';
 import { CompositeAppointmentEventPublisher } from '../infrastructure/composite-appointment-event.publisher';
 import { NotificationAppointmentEventPublisher } from '../infrastructure/notification-appointment-event.publisher';
+import { AppointmentView } from '../domain/appointment.entity';
 import { AppointmentService } from '../services/appointment.service';
 
 const appointmentStatusValues = [
@@ -52,8 +54,9 @@ const appointmentTypeValues = [
 ] as const;
 
 const idParamsSchema = z.object({
-    id: z.string().uuid('Invalid appointment id'),
-});
+    id: z.string().uuid('Invalid appointment id').optional(),
+    appointmentId: z.string().uuid('Invalid appointment id').optional(),
+}).transform((params) => ({ id: params.id ?? params.appointmentId! }));
 
 const dateOnlySchema = z
     .string()
@@ -80,12 +83,19 @@ const optionalDateTimeSchema = z.preprocess((value) => {
 }, dateTimeSchema.optional());
 
 const bookAppointmentBodySchema = z.object({
-    patientId: z.string().uuid('Invalid patient id'),
-    serviceCatalogId: z.string().uuid('Invalid service id'),
-    staffProfileId: z.string().uuid('Invalid staff profile id'),
-    scheduledAt: dateTimeSchema,
+    patientId: z.string().uuid('Invalid patient id').optional(),
+    serviceCatalogId: z.string().uuid('Invalid service id').optional(),
+    staffProfileId: z.string().uuid('Invalid staff profile id').optional(),
+    doctorId: z.string().uuid('Invalid doctor id').optional(),
+    scheduledAt: dateTimeSchema.optional(),
+    date: dateTimeSchema.optional(),
     appointmentType: z.enum(appointmentTypeValues).optional(),
     notes: z.string().trim().max(1000).nullable().optional(),
+    reason: z.string().trim().max(1000).nullable().optional(),
+}).refine((body) => body.staffProfileId || body.doctorId, {
+    message: 'staffProfileId or doctorId is required',
+}).refine((body) => body.scheduledAt || body.date, {
+    message: 'scheduledAt or date is required',
 });
 
 const listAppointmentsQuerySchema = z.object({
@@ -142,6 +152,59 @@ const updateStatusBodySchema = z
         message: 'status or action is required',
     });
 
+function hasPermission(req: Request, permission: string) {
+    const permissions = req.user?.permissions ?? [];
+
+    return permissions.includes(permission) ||
+        permissions.some((item) => item.startsWith(`${permission}:`));
+}
+
+function canAccessAppointment(req: Request, appointment: AppointmentView, permission: string) {
+    if (hasPermission(req, permission)) {
+        return true;
+    }
+
+    const userId = req.user?.id;
+
+    return Boolean(
+        userId &&
+        (appointment.patient.userId === userId || appointment.staff?.userId === userId),
+    );
+}
+
+function toMobileAppointment(appointment: AppointmentView) {
+    const doctorName = appointment.staff?.displayName ?? null;
+
+    return {
+        ...appointment,
+        _id: appointment.id,
+        doctorId: appointment.staffProfileId,
+        date: appointment.scheduledAt,
+        reason: appointment.notes,
+        doctor: appointment.staff
+            ? {
+                id: appointment.staff.id,
+                _id: appointment.staff.id,
+                userId: appointment.staff.userId,
+                name: doctorName,
+                fullName: doctorName,
+                firstName: doctorName,
+                lastName: '',
+                specialty: appointment.staff.specialization,
+                specialization: appointment.staff.specialization,
+                employeeCode: appointment.staff.employeeCode,
+            }
+            : null,
+    };
+}
+
+function toMobileAppointmentList(result: { items: AppointmentView[]; meta: unknown }) {
+    return {
+        ...result,
+        items: result.items.map(toMobileAppointment),
+    };
+}
+
 function statusFromAction(action: z.infer<typeof statusActionSchema>): AppointmentStatus {
     const statusByAction: Record<z.infer<typeof statusActionSchema>, AppointmentStatus> = {
         confirm: AppointmentStatus.CONFIRMED,
@@ -161,8 +224,9 @@ export class AppointmentController {
     private readonly commandBus = new CommandBus();
     private readonly queryBus = new QueryBus();
     private readonly slotLockRepository = createAppointmentSlotLockRepository();
+    private readonly appointmentRepository = new AppointmentPrismaRepository();
     private readonly service = new AppointmentService(
-        new AppointmentPrismaRepository(),
+        this.appointmentRepository,
         new ScheduleService(new SchedulePrismaRepository(), this.slotLockRepository),
         this.slotLockRepository,
         new CompositeAppointmentEventPublisher([
@@ -184,20 +248,48 @@ export class AppointmentController {
 
     async create(req: Request, res: Response) {
         const body = bookAppointmentBodySchema.parse(req.body);
+        const userId = req.user?.id;
+
+        if (!userId) {
+            throw new AppError('Unauthorized', 401);
+        }
+
+        const patient = await this.appointmentRepository.findPatientByUserId(userId);
+
+        if (!patient) {
+            throw new AppError('Patient not found or inactive', 404);
+        }
+
+        const staff = await this.appointmentRepository.findStaffByIdOrUserId(
+            body.staffProfileId ?? body.doctorId!,
+        );
+
+        if (!staff) {
+            throw new AppError('Staff profile not found or inactive', 404);
+        }
+
+        const service = body.serviceCatalogId
+            ? await this.appointmentRepository.findServiceById(body.serviceCatalogId)
+            : await this.appointmentRepository.findDefaultServiceForStaff(staff.id);
+
+        if (!service) {
+            throw new AppError('Service not found or inactive', 404);
+        }
+
         const result = await this.commandBus.execute(
             this.bookAppointmentHandler,
             new BookAppointmentCommand(
-                body.patientId,
-                body.serviceCatalogId,
-                body.staffProfileId,
-                body.scheduledAt,
+                patient.id,
+                service.id,
+                staff.id,
+                body.scheduledAt ?? body.date!,
                 body.appointmentType as AppointmentType | undefined,
-                body.notes,
+                body.notes ?? body.reason,
                 req.user?.id,
             ),
         );
 
-        return res.status(201).json(result);
+        return res.status(201).json(toMobileAppointment(result));
     }
 
     async list(req: Request, res: Response) {
@@ -218,7 +310,7 @@ export class AppointmentController {
             ),
         );
 
-        return res.status(200).json(result);
+        return res.status(200).json(toMobileAppointmentList(result));
     }
 
     async today(_req: Request, res: Response) {
@@ -227,7 +319,7 @@ export class AppointmentController {
             new ListTodayAppointmentsQuery(),
         );
 
-        return res.status(200).json(result);
+        return res.status(200).json(result.map(toMobileAppointment));
     }
 
     async reminderCandidates(req: Request, res: Response) {
@@ -247,7 +339,67 @@ export class AppointmentController {
             new GetAppointmentByIdQuery(params.id),
         );
 
-        return res.status(200).json(result);
+        if (!canAccessAppointment(req, result, 'appointments:read')) {
+            throw new AppError('Forbidden', 403);
+        }
+
+        return res.status(200).json(toMobileAppointment(result));
+    }
+
+    async my(req: Request, res: Response) {
+        const query = listAppointmentsQuerySchema.parse(req.query);
+        const limit = req.query.limit === undefined ? 100 : query.limit;
+        const patient = await this.appointmentRepository.findPatientByIdOrUserId(req.user!.id);
+
+        if (!patient) {
+            throw new AppError('Patient profile not found', 404);
+        }
+
+        const result = await this.queryBus.execute(
+            this.listAppointmentsHandler,
+            new ListAppointmentsQuery(
+                query.page,
+                limit,
+                query.date,
+                query.from,
+                query.to,
+                undefined,
+                patient.id,
+                query.departmentId,
+                query.status as AppointmentStatus | undefined,
+                query.hasNoFeedback,
+            ),
+        );
+
+        return res.status(200).json(toMobileAppointmentList(result));
+    }
+
+    async doctorMy(req: Request, res: Response) {
+        const query = listAppointmentsQuerySchema.parse(req.query);
+        const limit = req.query.limit === undefined ? 100 : query.limit;
+        const staff = await this.appointmentRepository.findStaffByIdOrUserId(req.user!.id);
+
+        if (!staff) {
+            throw new AppError('Staff profile not found', 404);
+        }
+
+        const result = await this.queryBus.execute(
+            this.listAppointmentsHandler,
+            new ListAppointmentsQuery(
+                query.page,
+                limit,
+                query.date,
+                query.from,
+                query.to,
+                staff.id,
+                query.patientId,
+                query.departmentId,
+                query.status as AppointmentStatus | undefined,
+                query.hasNoFeedback,
+            ),
+        );
+
+        return res.status(200).json(toMobileAppointmentList(result));
     }
 
     async reschedule(req: Request, res: Response) {
@@ -275,6 +427,23 @@ export class AppointmentController {
         const status = body.status
             ? (body.status as AppointmentStatus)
             : statusFromAction(body.action!);
+        const appointment = await this.queryBus.execute(
+            this.getAppointmentByIdHandler,
+            new GetAppointmentByIdQuery(params.id),
+        );
+
+        if (!canAccessAppointment(req, appointment, 'appointments:update')) {
+            throw new AppError('Forbidden', 403);
+        }
+
+        if (
+            !hasPermission(req, 'appointments:update') &&
+            appointment.patient.userId === req.user?.id &&
+            status !== AppointmentStatus.CANCELLED
+        ) {
+            throw new AppError('Patients can only cancel their own appointments', 403);
+        }
+
         const result = await this.commandBus.execute(
             this.updateAppointmentStatusHandler,
             new UpdateAppointmentStatusCommand(
@@ -285,6 +454,6 @@ export class AppointmentController {
             ),
         );
 
-        return res.status(200).json(result);
+        return res.status(200).json(toMobileAppointment(result));
     }
 }

@@ -21,13 +21,18 @@ export class PatientService {
     constructor(private readonly patientRepository: PatientRepository) {}
 
     async createPatient(data: CreatePatientData) {
+        const userId = data.canCreateAll ? data.userId ?? null : data.actorUserId ?? null;
         const email = normalizeEmail(data.email);
         const personalNumber = normalizePersonalNumber(data.personalNumber);
         const personalNumberHash = hashPersonalNumber(personalNumber);
 
-        if (data.userId) {
+        if (!data.canCreateAll && !userId) {
+            throw new AppError('Forbidden', 403);
+        }
+
+        if (userId) {
             const existingUserPatient = await this.patientRepository.findByUserId(
-                data.userId,
+                userId,
             );
 
             if (existingUserPatient) {
@@ -35,14 +40,10 @@ export class PatientService {
             }
         }
 
-        if (!data.canCreateAll && data.userId !== data.actorUserId) {
-            throw new AppError('Forbidden', 403);
-        }
-
         await this.ensureNoDuplicate(email, personalNumberHash);
 
         return this.patientRepository.create({
-            userId: data.userId ?? null,
+            userId,
             firstName: this.requiredText(data.firstName, 'First name'),
             lastName: this.requiredText(data.lastName, 'Last name'),
             email,

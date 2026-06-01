@@ -9,14 +9,33 @@ ADD COLUMN IF NOT EXISTS "search_vector" tsvector GENERATED ALWAYS AS (
 ALTER TABLE "appointments"
 ADD COLUMN IF NOT EXISTS "search_vector" tsvector GENERATED ALWAYS AS (
     setweight(to_tsvector('simple', coalesce("notes", '')), 'B') ||
-    setweight(to_tsvector('simple', "status"::text), 'C') ||
-    setweight(to_tsvector('simple', "appointment_type"::text), 'C')
+    setweight(to_tsvector('simple', CASE "status"
+        WHEN 'SCHEDULED' THEN 'SCHEDULED'
+        WHEN 'CONFIRMED' THEN 'CONFIRMED'
+        WHEN 'CHECKED_IN' THEN 'CHECKED_IN'
+        WHEN 'IN_PROGRESS' THEN 'IN_PROGRESS'
+        WHEN 'COMPLETED' THEN 'COMPLETED'
+        WHEN 'CANCELLED' THEN 'CANCELLED'
+        WHEN 'NO_SHOW' THEN 'NO_SHOW'
+    END), 'C') ||
+    setweight(to_tsvector('simple', CASE "appointment_type"
+        WHEN 'IN_PERSON' THEN 'IN_PERSON'
+        WHEN 'VIRTUAL' THEN 'VIRTUAL'
+        WHEN 'WALK_IN' THEN 'WALK_IN'
+        WHEN 'FOLLOW_UP' THEN 'FOLLOW_UP'
+    END), 'C')
 ) STORED;
 
 ALTER TABLE "lab_orders"
 ADD COLUMN IF NOT EXISTS "search_vector" tsvector GENERATED ALWAYS AS (
     setweight(to_tsvector('simple', coalesce("notes", '')), 'B') ||
-    setweight(to_tsvector('simple', "status"::text), 'C') ||
+    setweight(to_tsvector('simple', CASE "status"
+        WHEN 'PENDING' THEN 'PENDING'
+        WHEN 'COLLECTED' THEN 'COLLECTED'
+        WHEN 'IN_PROGRESS' THEN 'IN_PROGRESS'
+        WHEN 'COMPLETED' THEN 'COMPLETED'
+        WHEN 'CANCELLED' THEN 'CANCELLED'
+    END), 'C') ||
     setweight(to_tsvector('simple', coalesce("priority", '')), 'C')
 ) STORED;
 

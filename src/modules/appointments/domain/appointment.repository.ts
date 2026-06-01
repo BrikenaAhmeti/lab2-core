@@ -73,8 +73,12 @@ export interface AppointmentRepository {
     create(data: CreateAppointmentData): Promise<AppointmentView>;
     findById(id: string): Promise<AppointmentView | null>;
     findPatientById(id: string): Promise<AppointmentPatientSummary | null>;
+    findPatientByUserId(userId: string): Promise<AppointmentPatientSummary | null>;
+    findPatientByIdOrUserId(id: string): Promise<AppointmentPatientSummary | null>;
     findServiceById(id: string): Promise<AppointmentServiceSummary | null>;
+    findDefaultServiceForStaff(staffProfileId: string): Promise<AppointmentServiceSummary | null>;
     findStaffById(id: string): Promise<AppointmentStaffAvailabilitySummary | null>;
+    findStaffByIdOrUserId(id: string): Promise<AppointmentStaffAvailabilitySummary | null>;
     countConflictingAppointments(filters: AppointmentConflictFilters): Promise<number>;
     listReminderCandidates(filters: AppointmentReminderFilters): Promise<AppointmentView[]>;
     list(filters: ListAppointmentsFilters): Promise<AppointmentListResult>;

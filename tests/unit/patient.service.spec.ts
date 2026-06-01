@@ -90,6 +90,36 @@ describe('PatientService', () => {
         });
     });
 
+    it('creates a self patient profile for a normal authenticated user', async () => {
+        const repository = createRepositoryMock();
+        const actorUserId = '15e1a6c6-998a-4d47-a1de-a55859e958cc';
+        repository.findByUserId.mockResolvedValue(null);
+        repository.findByEmail.mockResolvedValue(null);
+        repository.findByPersonalNumberHash.mockResolvedValue(null);
+        repository.create.mockResolvedValue({
+            ...patient,
+            userId: actorUserId,
+        });
+        const service = new PatientService(repository);
+
+        await service.createPatient({
+            userId: '11111111-1111-4111-8111-111111111111',
+            firstName: 'Elizabeta',
+            lastName: 'Bajrami',
+            email: 'elizabetabajrami2001@gmail.com',
+            actorUserId,
+            canCreateAll: false,
+        });
+
+        expect(repository.findByUserId).toHaveBeenCalledWith(actorUserId);
+        expect(repository.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: actorUserId,
+                actorUserId,
+            }),
+        );
+    });
+
     it('allows a patient to read their own profile without broad staff permission', async () => {
         const repository = createRepositoryMock();
         repository.findById.mockResolvedValue(patient);

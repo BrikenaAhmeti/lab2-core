@@ -109,6 +109,22 @@ export class StaffService {
         });
     }
 
+    async listBookableDoctors(filters: {
+        page: number;
+        limit: number;
+        departmentId?: string;
+        search?: string;
+    }) {
+        return this.staffRepository.list({
+            page: filters.page,
+            limit: filters.limit,
+            departmentId: filters.departmentId,
+            status: 'ACTIVE',
+            search: normalizeSearch(filters.search),
+            roleKey: 'doctor',
+        });
+    }
+
     async listDepartmentStaff(filters: {
         departmentId: string;
         page: number;

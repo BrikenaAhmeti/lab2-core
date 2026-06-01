@@ -9,6 +9,12 @@ const { createApp } = require('../../src/app');
 const {
     StaffPrismaRepository,
 } = require('../../src/modules/staff/infrastructure/staff.prisma.repository');
+const {
+    AppointmentPrismaRepository,
+} = require('../../src/modules/appointments/infrastructure/appointment.prisma.repository');
+const {
+    SchedulePrismaRepository,
+} = require('../../src/modules/schedules/infrastructure/schedule.prisma.repository');
 
 const department = {
     id: '8d1dbd2c-b5c4-4d8f-b75b-e8a2dce8f30e',
@@ -49,6 +55,33 @@ const staffProfile = {
             department,
         },
     ],
+    createdAt: new Date('2026-01-10T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-10T00:00:00.000Z'),
+};
+
+const service = {
+    id: '6f817061-d12c-42d1-8d57-24a0ddbd8b82',
+    departmentId: department.id,
+    name: 'General Consultation',
+    defaultDurationMinutes: 30,
+    defaultPrice: 50,
+    isActive: true,
+    department,
+};
+
+const schedule = {
+    id: 'schedule-1',
+    staffProfileId: staffProfile.id,
+    departmentId: department.id,
+    dayOfWeek: 3,
+    startTime: '09:00',
+    endTime: '10:00',
+    slotDurationMinutes: 30,
+    breakStart: null,
+    breakEnd: null,
+    validFrom: null,
+    validTo: null,
+    isActive: true,
     createdAt: new Date('2026-01-10T00:00:00.000Z'),
     updatedAt: new Date('2026-01-10T00:00:00.000Z'),
 };
@@ -154,6 +187,108 @@ describe('Staff routes', () => {
                 status: 'ACTIVE',
             }),
         );
+    });
+
+    it('exposes bookable doctors with core staff ids for appointment booking', async () => {
+        const listSpy = jest.spyOn(StaffPrismaRepository.prototype, 'list').mockResolvedValue({
+            items: [staffProfile],
+            meta: {
+                page: 1,
+                limit: 10,
+                total: 1,
+                totalPages: 1,
+            },
+        });
+
+        const response = await request(app).get('/api/staff/doctors?search=cardio');
+
+        expect(response.status).toBe(200);
+        expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0]).toEqual(expect.objectContaining({
+            id: staffProfile.id,
+            _id: staffProfile.id,
+            userId: staffProfile.userId,
+            name: 'DR-001 - Cardiology',
+            specialty: 'Cardiology',
+            specialization: 'Cardiology',
+            employeeCode: 'DR-001',
+        }));
+        expect(listSpy).toHaveBeenCalledWith(expect.objectContaining({
+            roleKey: 'doctor',
+            status: 'ACTIVE',
+        }));
+    });
+
+    it('exposes patient-facing available slots for a bookable doctor', async () => {
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findDefaultServiceForStaff')
+            .mockResolvedValue(service);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfile.id,
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId: department.id,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest.spyOn(SchedulePrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: service.id,
+            departmentId: department.id,
+            defaultDurationMinutes: 30,
+            isActive: true,
+        });
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listSchedulesForDay')
+            .mockResolvedValue([schedule]);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listExceptionsForDate')
+            .mockResolvedValue([]);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listBookedAppointments')
+            .mockResolvedValue([]);
+
+        const response = await request(app)
+            .get(`/api/staff/doctors/${staffProfile.id}/available-slots?date=2026-06-03`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.doctorId).toBe(staffProfile.id);
+        expect(response.body.serviceId).toBe(service.id);
+        expect(Array.isArray(response.body.slots)).toBe(true);
+        expect(response.body.slots.map((slot: { startTime: string }) => slot.startTime))
+            .toEqual(['09:00', '09:30']);
+    });
+
+    it('returns an empty slots array for a bookable doctor with no availability', async () => {
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findDefaultServiceForStaff')
+            .mockResolvedValue(service);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfile.id,
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId: department.id,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest.spyOn(SchedulePrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: service.id,
+            departmentId: department.id,
+            defaultDurationMinutes: 30,
+            isActive: true,
+        });
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listSchedulesForDay')
+            .mockResolvedValue([]);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listExceptionsForDate')
+            .mockResolvedValue([]);
+
+        const response = await request(app)
+            .get(`/api/staff/doctors/${staffProfile.id}/available-slots?date=2026-06-03`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.doctorId).toBe(staffProfile.id);
+        expect(response.body.serviceId).toBe(service.id);
+        expect(response.body.slots).toEqual([]);
     });
 
     it('returns staff directory for a department', async () => {

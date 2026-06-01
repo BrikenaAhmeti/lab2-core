@@ -37,6 +37,8 @@ const labOrderInclude = {
             lastName: true,
             email: true,
             phone: true,
+            dateOfBirth: true,
+            gender: true,
         },
     },
     appointment: {
@@ -324,6 +326,8 @@ export class LabPrismaRepository implements LabRepository {
                 lastName: true,
                 email: true,
                 phone: true,
+                dateOfBirth: true,
+                gender: true,
             },
         });
 
@@ -343,6 +347,8 @@ export class LabPrismaRepository implements LabRepository {
                 lastName: true,
                 email: true,
                 phone: true,
+                dateOfBirth: true,
+                gender: true,
             },
         });
 

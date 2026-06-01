@@ -43,6 +43,8 @@ export interface LabOrderPatientSummary {
     lastName: string;
     email: string | null;
     phone: string | null;
+    dateOfBirth?: Date | null;
+    gender?: string | null;
     name: string;
 }
 
@@ -138,6 +140,8 @@ export interface LabOrderPatientLink {
     lastName: string;
     email: string | null;
     phone: string | null;
+    dateOfBirth?: Date | null;
+    gender?: string | null;
     name: string;
 }
 

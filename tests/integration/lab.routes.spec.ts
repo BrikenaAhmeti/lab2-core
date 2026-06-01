@@ -10,11 +10,16 @@ import { LabOrderView, LabTestEntity } from '../../src/modules/lab/domain/lab.en
 process.env.NODE_ENV = 'test';
 process.env.JWT_ACCESS_SECRET = 'lab-routes-test-secret';
 process.env.FRONTEND_ORIGINS = '';
+process.env.INTERNAL_API_KEY = '';
+process.env.AI_SERVICE_URL = '';
 
 const { createApp } = require('../../src/app');
 const {
     LabPrismaRepository,
 } = require('../../src/modules/lab/infrastructure/lab.prisma.repository');
+const {
+    HttpLabAiClient,
+} = require('../../src/modules/lab/infrastructure/lab-ai.http.client');
 
 const patientId = '35974dde-783f-43a1-bcab-117d754f81e1';
 const patientUserId = '9dbd7a27-0b3c-4939-8a2f-1f20fd1ef6ee';
@@ -306,11 +311,27 @@ describe('Lab routes', () => {
         );
     });
 
-    it('returns the AI trigger stub through POST /api/lab-orders/:id/trigger-ai', async () => {
+    it('queues AI interpretation through POST /api/lab-orders/:id/trigger-ai', async () => {
+        const completedOrder: LabOrderView = {
+            ...labOrder,
+            status: LabOrderStatus.COMPLETED,
+            completedAt: new Date('2026-05-21T09:00:00.000Z'),
+            items: labOrder.items.map((item) => ({
+                ...item,
+                resultValue: '12.0',
+                resultUnit: '10^9/L',
+                resultStatus: LabResultStatus.ABNORMAL,
+                completedAt: new Date('2026-05-21T08:55:00.000Z'),
+                flag: 'abnormal',
+            })),
+        };
         jest.spyOn(
             LabPrismaRepository.prototype,
             'findLabOrderById',
-        ).mockResolvedValue(labOrder);
+        ).mockResolvedValue(completedOrder);
+        const queueSpy = jest
+            .spyOn(HttpLabAiClient.prototype, 'queueLabInterpretation')
+            .mockResolvedValue({ labOrderId, status: 'queued' });
 
         const response = await request(app)
             .post(`/api/lab-orders/${labOrderId}/trigger-ai`)
@@ -321,10 +342,21 @@ describe('Lab routes', () => {
             .send();
 
         expect(response.status).toBe(202);
-        expect(response.body).toEqual({
+        expect(response.body).toEqual({ labOrderId, status: 'queued' });
+        expect(queueSpy).toHaveBeenCalledWith(
             labOrderId,
-            status: 'not_configured',
-            message: 'AI interpretation is not configured in the core service yet',
-        });
+            expect.objectContaining({
+                patientId,
+                results: [
+                    expect.objectContaining({
+                        name: 'Complete Blood Count',
+                        value: 12,
+                        unit: '10^9/L',
+                        referenceRange: '4.0-10.0',
+                        flag: 'high',
+                    }),
+                ],
+            }),
+        );
     });
 });

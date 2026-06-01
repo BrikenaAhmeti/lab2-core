@@ -909,10 +909,10 @@ const schemas = {
     }),
     TriggerAiResponse: objectSchema({
         labOrderId: uuid,
-        status: { type: 'string', example: 'not_configured' },
+        status: { type: 'string', enum: ['queued', 'not_configured'], example: 'queued' },
         message: {
             type: 'string',
-            example: 'AI interpretation is not configured in the core service yet',
+            example: 'AI service URL or internal API key is not configured',
         },
     }),
 
@@ -2159,11 +2159,12 @@ const paths = {
         post: operation({
             tags: ['Lab Orders'],
             summary: 'Trigger AI interpretation for a lab order',
-            description: 'Current core-service implementation returns a not_configured stub and does not call OpenAI directly.',
+            description: 'Queues AI lab interpretation through the AI Service internal endpoint. Automatic queueing also runs when a lab order is completed.',
             parameters: [idParam()],
             responses: {
-                202: jsonResponse('AI interpretation trigger accepted or not configured', ref('TriggerAiResponse')),
+                202: jsonResponse('AI interpretation trigger queued or not configured', ref('TriggerAiResponse')),
                 ...authResponses,
+                409: errorResponse('Lab order must be completed with all results'),
                 404: errorResponse('Lab order not found'),
             },
         }),

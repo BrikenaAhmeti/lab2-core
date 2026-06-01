@@ -1,7 +1,15 @@
 import { LabOrderStatus } from '../../../generated/prisma';
 import { AppError } from '../../../shared/core/errors/app-error';
 import {
+    AiLabResultFlag,
+    LabAiClient,
+    LabAiInterpretationRequest,
+    LabAiPatientContext,
+    NoopLabAiClient,
+} from '../domain/lab-ai.client';
+import {
     evaluateLabResult,
+    parseReferenceRange,
 } from '../domain/lab-result-evaluator';
 import {
     normalizeLabCode,
@@ -39,11 +47,26 @@ function hasDuplicates(values: string[]) {
     return new Set(values).size !== values.length;
 }
 
+function parseResultNumber(value: string) {
+    const match = value.match(/-?\d+(?:\.\d+)?/);
+    const parsed = match ? Number(match[0]) : Number.NaN;
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isPresent<T>(value: T | null | undefined): value is T {
+    return value !== undefined && value !== null;
+}
+
+type ExistingLabOrder = NonNullable<
+    Awaited<ReturnType<LabRepository['findLabOrderById']>>
+>;
+
 export class LabService {
     constructor(
         private readonly labRepository: LabRepository,
         private readonly eventPublisher: LabEventPublisher,
         private readonly nowProvider: () => Date = () => new Date(),
+        private readonly aiClient: LabAiClient = new NoopLabAiClient(),
     ) {}
 
     async createLabTest(data: {
@@ -339,6 +362,7 @@ export class LabService {
                 order: updatedOrder,
                 actorUserId,
             });
+            await this.triggerAiSafely(updatedOrder);
         }
 
         return updatedOrder;
@@ -402,10 +426,16 @@ export class LabService {
             };
         });
 
-        return this.labRepository.enterLabOrderResults(id, {
+        const updatedOrder = await this.labRepository.enterLabOrderResults(id, {
             items: updates,
             actorUserId: data.actorUserId,
         });
+
+        if (this.isCompletedWithResults(updatedOrder)) {
+            await this.triggerAiSafely(updatedOrder);
+        }
+
+        return updatedOrder;
     }
 
     async reviewLabOrder(
@@ -446,11 +476,135 @@ export class LabService {
     async triggerAi(id: string) {
         const order = await this.getExistingLabOrder(id);
 
+        this.ensureReadyForAi(order);
+
+        return this.queueAiInterpretation(order);
+    }
+
+    private isCompletedWithResults(order: ExistingLabOrder | null) {
+        return (
+            !!order &&
+            order.status === LabOrderStatus.COMPLETED &&
+            order.items.length > 0 &&
+            order.items.every((item) => !!item.resultValue)
+        );
+    }
+
+    private ensureReadyForAi(order: ExistingLabOrder) {
+        if (order.status !== LabOrderStatus.COMPLETED) {
+            throw new AppError(
+                'Only completed lab orders can be sent for AI interpretation',
+                409,
+            );
+        }
+
+        if (!order.items.length || order.items.some((item) => !item.resultValue)) {
+            throw new AppError(
+                'All lab order items must have results before AI interpretation',
+                409,
+            );
+        }
+    }
+
+    private async triggerAiSafely(order: ExistingLabOrder) {
+        try {
+            this.ensureReadyForAi(order);
+            await this.queueAiInterpretation(order);
+        } catch {
+            // Lab completion should not fail because background AI generation failed.
+        }
+    }
+
+    private async queueAiInterpretation(order: ExistingLabOrder) {
+        try {
+            return await this.aiClient.queueLabInterpretation(
+                order.id,
+                this.buildAiInterpretationPayload(order),
+            );
+        } catch {
+            throw new AppError('AI interpretation service is unavailable', 502);
+        }
+    }
+
+    private buildAiInterpretationPayload(order: ExistingLabOrder): LabAiInterpretationRequest {
+        const patientContext = this.buildPatientContext(order);
+
         return {
-            labOrderId: order.id,
-            status: 'not_configured',
-            message: 'AI interpretation is not configured in the core service yet',
+            patientId: order.patientId,
+            results: order.items
+                .filter((item) => item.resultValue)
+                .map((item) => {
+                    const numericValue = parseResultNumber(item.resultValue as string);
+
+                    return {
+                        name: item.labTest.name,
+                        value: numericValue ?? (item.resultValue as string),
+                        unit: item.resultUnit ?? undefined,
+                        referenceRange: item.labTest.referenceRange ?? undefined,
+                        flag: this.toAiResultFlag(item),
+                    };
+                }),
+            patientContext,
         };
+    }
+
+    private buildPatientContext(order: ExistingLabOrder): LabAiPatientContext | undefined {
+        const age = order.patient.dateOfBirth
+            ? this.calculateAge(order.patient.dateOfBirth)
+            : undefined;
+        const knownConditions = [order.medicalRecord?.diagnosis]
+            .filter(isPresent)
+            .map((item) => item.trim())
+            .filter((item) => item.length > 0);
+        const context: LabAiPatientContext = {
+            age,
+            gender: order.patient.gender ?? undefined,
+            knownConditions: knownConditions.length ? knownConditions : undefined,
+        };
+
+        return Object.values(context).some((value) => value !== undefined)
+            ? context
+            : undefined;
+    }
+
+    private calculateAge(dateOfBirth: Date) {
+        const today = this.nowProvider();
+        let age = today.getUTCFullYear() - dateOfBirth.getUTCFullYear();
+        const birthdayHasPassed =
+            today.getUTCMonth() > dateOfBirth.getUTCMonth() ||
+            (today.getUTCMonth() === dateOfBirth.getUTCMonth() &&
+                today.getUTCDate() >= dateOfBirth.getUTCDate());
+
+        if (!birthdayHasPassed) {
+            age -= 1;
+        }
+
+        return age > 0 ? age : undefined;
+    }
+
+    private toAiResultFlag(
+        orderItem: ExistingLabOrder['items'][number],
+    ): AiLabResultFlag | undefined {
+        if (orderItem.flag === 'critical') {
+            return 'critical';
+        }
+
+        if (orderItem.flag === 'normal') {
+            return 'normal';
+        }
+
+        if (orderItem.flag !== 'abnormal' || !orderItem.resultValue) {
+            return undefined;
+        }
+
+        const numericValue = parseResultNumber(orderItem.resultValue);
+        const range = parseReferenceRange(orderItem.labTest.referenceRange);
+
+        if (numericValue === null || !range) {
+            return undefined;
+        }
+
+        return numericValue < range.min ? 'low' : 'high';
     }
 
     private async getExistingLabOrder(id: string) {

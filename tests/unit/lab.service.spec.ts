@@ -3,6 +3,7 @@ import {
     LabOrderStatus,
     LabResultStatus,
 } from '../../src/generated/prisma';
+import { LabAiClient } from '../../src/modules/lab/domain/lab-ai.client';
 import { LabEventPublisher } from '../../src/modules/lab/domain/lab-event.publisher';
 import { LabOrderView, LabTestEntity } from '../../src/modules/lab/domain/lab.entity';
 import { LabRepository } from '../../src/modules/lab/domain/lab.repository';
@@ -186,6 +187,12 @@ function createEventPublisherMock(): jest.Mocked<LabEventPublisher> {
     };
 }
 
+function createAiClientMock(): jest.Mocked<LabAiClient> {
+    return {
+        queueLabInterpretation: jest.fn(),
+    };
+}
+
 describe('LabService', () => {
     it('creates a lab order from consultation context', async () => {
         const repository = createRepositoryMock();
@@ -307,6 +314,151 @@ describe('LabService', () => {
             statusCode: 409,
         });
         expect(repository.updateLabOrderStatus).not.toHaveBeenCalled();
+    });
+
+    it('queues AI interpretation after completing a resulted order', async () => {
+        const repository = createRepositoryMock();
+        const eventPublisher = createEventPublisherMock();
+        const aiClient = createAiClientMock();
+        const completedAt = new Date('2026-05-21T10:30:00.000Z');
+        const resultedOrder: LabOrderView = {
+            ...order,
+            status: LabOrderStatus.IN_PROGRESS,
+            patient: {
+                ...order.patient,
+                dateOfBirth: new Date('1980-01-10T00:00:00.000Z'),
+                gender: 'female',
+            },
+            items: order.items.map((item, index) => ({
+                ...item,
+                resultValue: index === 0 ? '120' : '25',
+                resultUnit: index === 0 ? 'mg/dL' : 'U/L',
+                resultStatus:
+                    index === 0 ? LabResultStatus.ABNORMAL : LabResultStatus.ENTERED,
+                flag: index === 0 ? ('abnormal' as const) : ('normal' as const),
+                completedAt: new Date('2026-05-21T10:00:00.000Z'),
+            })),
+        };
+        repository.findLabOrderById.mockResolvedValue(resultedOrder);
+        repository.updateLabOrderStatus.mockResolvedValue({
+            ...resultedOrder,
+            status: LabOrderStatus.COMPLETED,
+            completedAt,
+        });
+        aiClient.queueLabInterpretation.mockResolvedValue({
+            labOrderId,
+            status: 'queued',
+        });
+        const service = new LabService(
+            repository,
+            eventPublisher,
+            () => completedAt,
+            aiClient,
+        );
+
+        await service.updateLabOrderStatus(
+            labOrderId,
+            LabOrderStatus.COMPLETED,
+            actorUserId,
+        );
+
+        expect(aiClient.queueLabInterpretation).toHaveBeenCalledWith(
+            labOrderId,
+            expect.objectContaining({
+                patientId,
+                results: expect.arrayContaining([
+                    expect.objectContaining({
+                        name: 'Glucose',
+                        value: 120,
+                        unit: 'mg/dL',
+                        referenceRange: '70-99 mg/dL',
+                        flag: 'high',
+                    }),
+                ]),
+                patientContext: expect.objectContaining({
+                    age: 46,
+                    gender: 'female',
+                    knownConditions: ['Diabetes screening'],
+                }),
+            }),
+        );
+    });
+
+    it('does not fail completion when background AI queueing fails', async () => {
+        const repository = createRepositoryMock();
+        const eventPublisher = createEventPublisherMock();
+        const aiClient = createAiClientMock();
+        const resultedOrder: LabOrderView = {
+            ...order,
+            status: LabOrderStatus.IN_PROGRESS,
+            items: order.items.map((item) => ({
+                ...item,
+                resultValue: '95',
+                resultUnit: 'mg/dL',
+                resultStatus: LabResultStatus.ENTERED,
+                flag: 'normal' as const,
+                completedAt: new Date('2026-05-21T10:00:00.000Z'),
+            })),
+        };
+        repository.findLabOrderById.mockResolvedValue(resultedOrder);
+        repository.updateLabOrderStatus.mockResolvedValue({
+            ...resultedOrder,
+            status: LabOrderStatus.COMPLETED,
+            completedAt: new Date('2026-05-21T10:30:00.000Z'),
+        });
+        aiClient.queueLabInterpretation.mockRejectedValue(new Error('AI unavailable'));
+        const service = new LabService(
+            repository,
+            eventPublisher,
+            undefined,
+            aiClient,
+        );
+
+        await expect(
+            service.updateLabOrderStatus(
+                labOrderId,
+                LabOrderStatus.COMPLETED,
+                actorUserId,
+            ),
+        ).resolves.toMatchObject({
+            id: labOrderId,
+            status: LabOrderStatus.COMPLETED,
+        });
+    });
+
+    it('manually queues AI interpretation for a completed order', async () => {
+        const repository = createRepositoryMock();
+        const eventPublisher = createEventPublisherMock();
+        const aiClient = createAiClientMock();
+        const completedOrder: LabOrderView = {
+            ...order,
+            status: LabOrderStatus.COMPLETED,
+            completedAt: new Date('2026-05-21T10:30:00.000Z'),
+            items: order.items.map((item) => ({
+                ...item,
+                resultValue: '55',
+                resultUnit: 'U/L',
+                resultStatus: LabResultStatus.ENTERED,
+                flag: 'normal' as const,
+                completedAt: new Date('2026-05-21T10:00:00.000Z'),
+            })),
+        };
+        repository.findLabOrderById.mockResolvedValue(completedOrder);
+        aiClient.queueLabInterpretation.mockResolvedValue({
+            labOrderId,
+            status: 'queued',
+        });
+        const service = new LabService(
+            repository,
+            eventPublisher,
+            undefined,
+            aiClient,
+        );
+
+        const result = await service.triggerAi(labOrderId);
+
+        expect(result).toEqual({ labOrderId, status: 'queued' });
+        expect(aiClient.queueLabInterpretation).toHaveBeenCalledTimes(1);
     });
 
     it('reviews a completed order and publishes a review event', async () => {

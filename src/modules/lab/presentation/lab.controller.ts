@@ -29,6 +29,7 @@ import { GetLabTestByIdQuery } from '../application/queries/get-lab-test-by-id.q
 import { ListLabOrdersQuery } from '../application/queries/list-lab-orders.query';
 import { ListLabTestsQuery } from '../application/queries/list-lab-tests.query';
 import { ListPendingLabOrdersQuery } from '../application/queries/list-pending-lab-orders.query';
+import { HttpLabAiClient } from '../infrastructure/lab-ai.http.client';
 import { LabPrismaRepository } from '../infrastructure/lab.prisma.repository';
 import { NotificationLabEventPublisher } from '../infrastructure/notification-lab-event.publisher';
 import { LabService } from '../services/lab.service';
@@ -180,6 +181,8 @@ export class LabController {
     private readonly service = new LabService(
         new LabPrismaRepository(),
         new NotificationLabEventPublisher(),
+        undefined,
+        new HttpLabAiClient(),
     );
     private readonly createLabTestHandler = new CreateLabTestHandler(this.service);
     private readonly listLabTestsHandler = new ListLabTestsHandler(this.service);

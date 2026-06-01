@@ -33,7 +33,8 @@ Copy `.env.example` and provide:
 - `FRONTEND_ORIGINS`
 - `REDIS_URL` for distributed appointment slot locks; without it the service falls back to in-memory locks
 - `MONGODB_URI` for report template persistence; without it report templates are kept in memory
-- `INTERNAL_API_KEY` for internal endpoints and notification-service calls
+- `INTERNAL_API_KEY` for internal endpoints, notification-service calls, and AI-service background jobs
+- `AI_SERVICE_URL` if automatic lab-result AI interpretation should be enabled
 - `NOTIFICATION_SERVICE_URL` if notification delivery should be enabled
 - `SENTRY_DSN` if backend error tracking should be enabled
 

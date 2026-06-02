@@ -31,6 +31,12 @@ export class SettingController {
         return res.status(200).json(result);
     }
 
+    async listPublic(_req: Request, res: Response) {
+        const result = await this.service.getPublicSettings();
+
+        return res.status(200).json(result);
+    }
+
     async update(req: Request, res: Response) {
         const params = settingKeyParamsSchema.parse(req.params);
         const body = updateSettingSchema.parse(req.body);
@@ -38,6 +44,7 @@ export class SettingController {
             performedByUserId: req.user?.id,
             ipAddress: req.ip,
             userAgent: req.get('user-agent') ?? undefined,
+            requestId: req.requestId,
         });
 
         return res.status(200).json(result);
@@ -49,6 +56,7 @@ export class SettingController {
             performedByUserId: req.user?.id,
             ipAddress: req.ip,
             userAgent: req.get('user-agent') ?? undefined,
+            requestId: req.requestId,
         });
 
         return res.status(200).json({

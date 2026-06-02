@@ -5,6 +5,7 @@ import { SettingService } from '../../src/modules/settings/services/setting.serv
 function createRepositoryMock(): jest.Mocked<SettingRepository> {
     return {
         findAll: jest.fn(),
+        findPublic: jest.fn(),
         findByKey: jest.fn(),
         findByKeys: jest.fn(),
         updateWithAudit: jest.fn(),
@@ -52,6 +53,29 @@ describe('SettingService', () => {
         expect(result.facility.settings).toHaveLength(1);
         expect(result.notifications.settings).toHaveLength(1);
         expect(result.facility.settings[0].label).toBe('Facility Name');
+    });
+
+    it('should list only public settings for website consumers', async () => {
+        const repository = createRepositoryMock();
+        const service = new SettingService(repository);
+
+        repository.findPublic.mockResolvedValue([
+            {
+                ...facilityNameSetting,
+                isPublic: true,
+            },
+        ]);
+
+        const result = await service.getPublicSettings();
+
+        expect(repository.findPublic).toHaveBeenCalledTimes(1);
+        expect(result.facility.settings).toHaveLength(1);
+        expect(result.facility.settings[0]).toEqual(
+            expect.objectContaining({
+                key: 'facility_name',
+                isPublic: true,
+            }),
+        );
     });
 
     it('should update a setting and write audit context', async () => {

@@ -660,4 +660,115 @@ describe('Appointment routes', () => {
             }),
         );
     });
+
+    it('reschedules a patient appointment through PATCH /api/appointments/:id/reschedule', async () => {
+        const newStart = new Date('2030-01-02T09:30:00.000Z');
+        const newEnd = new Date('2030-01-02T10:00:00.000Z');
+        const patientSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'findPatientByIdOrUserId')
+            .mockResolvedValue(patient);
+        const staffSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'findStaffByIdOrUserId')
+            .mockResolvedValue({
+                id: staffProfileId,
+                userId: appointment.staff!.userId,
+                employeeCode: 'DR-001',
+                specialization: 'Cardiologist',
+                employmentStatus: 'ACTIVE',
+                departments: [
+                    {
+                        departmentId,
+                        unassignedAt: null,
+                        department,
+                    },
+                ],
+            });
+        const rescheduleSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'reschedule')
+            .mockResolvedValue({
+                ...appointment,
+                scheduledAt: newStart,
+                endAt: newEnd,
+            });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findById').mockResolvedValue(appointment);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'countConflictingAppointments')
+            .mockResolvedValue(0);
+        mockAvailabilityDependencies();
+
+        const response = await request(app)
+            .patch(`/api/appointments/${appointmentId}/reschedule`)
+            .set('Authorization', `Bearer ${createAccessToken([], patient.userId!)}`)
+            .send({
+                doctorId: staffProfileId,
+                date: newStart.toISOString(),
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body.id).toBe(appointmentId);
+        expect(response.body.doctorId).toBe(staffProfileId);
+        expect(response.body.date).toBe(newStart.toISOString());
+        expect(patientSpy).toHaveBeenCalledWith(patient.userId);
+        expect(staffSpy).toHaveBeenCalledWith(staffProfileId);
+        expect(rescheduleSpy).toHaveBeenCalledWith(
+            appointmentId,
+            expect.objectContaining({
+                staffProfileId,
+                scheduledAt: newStart,
+                endAt: newEnd,
+            }),
+        );
+    });
+
+    it('rejects patient reschedule when doctorId is not the appointment doctor', async () => {
+        const otherDoctorId = '28eb5cb0-0000-4000-8000-000000000001';
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientByIdOrUserId')
+            .mockResolvedValue(patient);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findById').mockResolvedValue(appointment);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffByIdOrUserId')
+            .mockResolvedValue({
+                id: otherDoctorId,
+                userId: '28eb5cb0-0000-4000-8000-000000000002',
+                employeeCode: 'DR-002',
+                specialization: 'General Medicine',
+                employmentStatus: 'ACTIVE',
+                departments: [],
+            });
+        const rescheduleSpy = jest.spyOn(AppointmentPrismaRepository.prototype, 'reschedule');
+
+        const response = await request(app)
+            .patch(`/api/appointments/${appointmentId}/reschedule`)
+            .set('Authorization', `Bearer ${createAccessToken([], patient.userId!)}`)
+            .send({
+                doctorId: otherDoctorId,
+                date: '2030-01-02T09:30:00.000Z',
+            });
+
+        expect(response.status).toBe(400);
+        expect(response.body.message).toBe('Appointment can only be rescheduled with the same doctor');
+        expect(rescheduleSpy).not.toHaveBeenCalled();
+    });
 });

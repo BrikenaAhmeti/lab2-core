@@ -134,6 +134,11 @@ const rescheduleAppointmentBodySchema = z.object({
     message: 'scheduledAt or date is required',
 });
 
+const patientRescheduleBodySchema = z.object({
+    doctorId: z.string().uuid('Invalid doctor id'),
+    date: dateTimeSchema,
+});
+
 const statusActionSchema = z.enum([
     'confirm',
     'check-in',
@@ -432,6 +437,57 @@ export class AppointmentController {
                 body.staffProfileId,
                 body.appointmentType as AppointmentType | undefined,
                 body.notes,
+                req.user?.id,
+            ),
+        );
+
+        return res.status(200).json(toMobileAppointment(result));
+    }
+
+    async patientReschedule(req: Request, res: Response) {
+        const params = idParamsSchema.parse(req.params);
+        const body = patientRescheduleBodySchema.parse(req.body);
+        const patient = await this.appointmentRepository.findPatientByIdOrUserId(req.user!.id);
+
+        if (!patient) {
+            throw new AppError('Patient profile not found', 404);
+        }
+
+        const appointment = await this.queryBus.execute(
+            this.getAppointmentByIdHandler,
+            new GetAppointmentByIdQuery(params.id),
+        );
+
+        if (appointment.patientId !== patient.id) {
+            throw new AppError('Forbidden', 403);
+        }
+
+        if (
+            appointment.status === AppointmentStatus.CANCELLED ||
+            appointment.status === AppointmentStatus.COMPLETED
+        ) {
+            throw new AppError('Finalized appointments cannot be rescheduled', 422);
+        }
+
+        const staff = await this.appointmentRepository.findStaffByIdOrUserId(body.doctorId);
+
+        if (!staff) {
+            throw new AppError('Staff profile not found or inactive', 404);
+        }
+
+        if (staff.id !== appointment.staffProfileId) {
+            throw new AppError('Appointment can only be rescheduled with the same doctor', 400);
+        }
+
+        const result = await this.commandBus.execute(
+            this.rescheduleAppointmentHandler,
+            new RescheduleAppointmentCommand(
+                params.id,
+                body.date,
+                undefined,
+                staff.id,
+                undefined,
+                undefined,
                 req.user?.id,
             ),
         );

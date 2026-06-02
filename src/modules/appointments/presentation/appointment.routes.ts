@@ -95,6 +95,18 @@ appointmentRoutes.get(
     },
 );
 
+appointmentRoutes.patch(
+    '/:id/reschedule',
+    authMiddleware,
+    async (req, res, next) => {
+        try {
+            await controller.patientReschedule(req, res);
+        } catch (error) {
+            next(error);
+        }
+    },
+);
+
 appointmentRoutes.put(
     '/:id',
     authMiddleware,

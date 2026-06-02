@@ -7,6 +7,15 @@ import { departmentStaffRoutes } from '../../staff/presentation/staff.routes';
 const controller = new DepartmentController();
 
 export const departmentRoutes = Router();
+export const publicDepartmentRoutes = Router();
+
+publicDepartmentRoutes.get('/', async (req, res, next) => {
+    try {
+        await controller.list(req, res);
+    } catch (error) {
+        next(error);
+    }
+});
 
 /**
  * @openapi

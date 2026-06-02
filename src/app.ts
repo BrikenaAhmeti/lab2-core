@@ -8,10 +8,19 @@ import { notFoundHandler } from './shared/middleware/not-found';
 import { auditLogger } from './shared/middleware/audit-logger';
 import { requestContext } from './shared/middleware/request-context';
 import { requestLogger } from './shared/middleware/request-logger';
-import { departmentRoutes } from './modules/departments/presentation/department.routes';
-import { serviceCatalogRoutes } from './modules/service-catalog/presentation/service-catalog.routes';
+import {
+    departmentRoutes,
+    publicDepartmentRoutes,
+} from './modules/departments/presentation/department.routes';
+import {
+    publicServiceCatalogRoutes,
+    serviceCatalogRoutes,
+} from './modules/service-catalog/presentation/service-catalog.routes';
 import { staffPositionTypeRoutes } from './modules/staff-position-types/presentation/staff-position-type.routes';
-import { staffRoutes } from './modules/staff/presentation/staff.routes';
+import {
+    publicStaffRoutes,
+    staffRoutes,
+} from './modules/staff/presentation/staff.routes';
 import {
     internalPatientRoutes,
     patientRoutes,
@@ -21,6 +30,7 @@ import { auditLogRoutes } from './modules/audit-logs/presentation/audit-log.rout
 import {
     appointmentRoutes,
     internalAppointmentRoutes,
+    publicAppointmentRoutes,
 } from './modules/appointments/presentation/appointment.routes';
 import { medicalRecordRoutes } from './modules/medical-records/presentation/medical-record.routes';
 import { prescriptionRoutes } from './modules/prescriptions/presentation/prescription.routes';
@@ -41,6 +51,19 @@ import {
     dataImportRoutes,
 } from './modules/data-exchange/presentation/data-exchange.routes';
 import { swaggerSpec } from './docs/swagger';
+
+function isLocalDevelopmentOrigin(origin: string) {
+    if (env.nodeEnv === 'production') {
+        return false;
+    }
+
+    try {
+        const url = new URL(origin);
+        return ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+    } catch {
+        return false;
+    }
+}
 
 /**
  * @openapi
@@ -67,6 +90,7 @@ export function createApp() {
     app.use(helmet());
     app.use(
         cors({
+            credentials: true,
             origin: (origin, callback) => {
                 if (!origin) return callback(null, true);
 
@@ -75,6 +99,10 @@ export function createApp() {
                 }
 
                 if (allowedOrigins.includes(origin)) {
+                    return callback(null, true);
+                }
+
+                if (isLocalDevelopmentOrigin(origin)) {
                     return callback(null, true);
                 }
 
@@ -100,6 +128,10 @@ export function createApp() {
     app.use('/api/services', serviceCatalogRoutes);
     app.use('/api/staff-position-types', staffPositionTypeRoutes);
     app.use('/api/staff', staffRoutes);
+    app.use('/api/public/departments', publicDepartmentRoutes);
+    app.use('/api/public/services', publicServiceCatalogRoutes);
+    app.use('/api/public/staff', publicStaffRoutes);
+    app.use('/api/public/appointments', publicAppointmentRoutes);
     app.use('/api/patients', patientRoutes);
     app.use('/api/appointments', appointmentRoutes);
     app.use('/api/medical-records', medicalRecordRoutes);

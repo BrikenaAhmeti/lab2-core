@@ -6,6 +6,15 @@ import { ScheduleController } from './schedule.controller';
 const controller = new ScheduleController();
 
 export const staffScheduleRoutes = Router({ mergeParams: true });
+export const publicStaffScheduleRoutes = Router({ mergeParams: true });
+
+publicStaffScheduleRoutes.get('/available-slots', async (req, res, next) => {
+    try {
+        await controller.getAvailableSlots(req, res);
+    } catch (error) {
+        next(error);
+    }
+});
 
 staffScheduleRoutes.get(
     '/schedules',

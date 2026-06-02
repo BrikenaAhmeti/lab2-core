@@ -9,10 +9,14 @@ import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
 import { SchedulePrismaRepository } from '../../schedules/infrastructure/schedule.prisma.repository';
 import { ScheduleService } from '../../schedules/services/schedule.service';
+import { PatientPrismaRepository } from '../../patients/infrastructure/patient.prisma.repository';
+import { PatientService } from '../../patients/services/patient.service';
 import { BookAppointmentCommand } from '../application/commands/book-appointment.command';
+import { BookPublicAppointmentCommand } from '../application/commands/book-public-appointment.command';
 import { RescheduleAppointmentCommand } from '../application/commands/reschedule-appointment.command';
 import { UpdateAppointmentStatusCommand } from '../application/commands/update-appointment-status.command';
 import { BookAppointmentHandler } from '../application/handlers/book-appointment.handler';
+import { BookPublicAppointmentHandler } from '../application/handlers/book-public-appointment.handler';
 import { GetAppointmentByIdHandler } from '../application/handlers/get-appointment-by-id.handler';
 import { ListAppointmentReminderCandidatesHandler } from '../application/handlers/list-appointment-reminder-candidates.handler';
 import { ListAppointmentsHandler } from '../application/handlers/list-appointments.handler';
@@ -81,6 +85,23 @@ const optionalDateTimeSchema = z.preprocess((value) => {
 
 const bookAppointmentBodySchema = z.object({
     patientId: z.string().uuid('Invalid patient id'),
+    serviceCatalogId: z.string().uuid('Invalid service id'),
+    staffProfileId: z.string().uuid('Invalid staff profile id'),
+    scheduledAt: dateTimeSchema,
+    appointmentType: z.enum(appointmentTypeValues).optional(),
+    notes: z.string().trim().max(1000).nullable().optional(),
+});
+
+const publicBookAppointmentBodySchema = z.object({
+    patient: z.object({
+        firstName: z.string().trim().min(1, 'First name is required').max(100),
+        lastName: z.string().trim().min(1, 'Last name is required').max(100),
+        email: z.string().trim().email().max(320),
+        phone: z.string().trim().min(1, 'Phone number is required').max(50),
+        personalNumber: z.string().trim().min(1, 'Personal number is required').max(50),
+        dateOfBirth: dateOnlySchema,
+        gender: z.string().trim().min(1, 'Gender is required').max(50),
+    }),
     serviceCatalogId: z.string().uuid('Invalid service id'),
     staffProfileId: z.string().uuid('Invalid staff profile id'),
     scheduledAt: dateTimeSchema,
@@ -173,7 +194,12 @@ export class AppointmentController {
             ? new AuditLogAppointmentAuditLogger()
             : new NoopAppointmentAuditLogger(),
     );
+    private readonly patientService = new PatientService(new PatientPrismaRepository());
     private readonly bookAppointmentHandler = new BookAppointmentHandler(this.service);
+    private readonly bookPublicAppointmentHandler = new BookPublicAppointmentHandler(
+        this.service,
+        this.patientService,
+    );
     private readonly listAppointmentsHandler = new ListAppointmentsHandler(this.service);
     private readonly listTodayAppointmentsHandler = new ListTodayAppointmentsHandler(this.service);
     private readonly listAppointmentReminderCandidatesHandler =
@@ -194,6 +220,23 @@ export class AppointmentController {
                 body.appointmentType as AppointmentType | undefined,
                 body.notes,
                 req.user?.id,
+            ),
+        );
+
+        return res.status(201).json(result);
+    }
+
+    async publicCreate(req: Request, res: Response) {
+        const body = publicBookAppointmentBodySchema.parse(req.body);
+        const result = await this.commandBus.execute(
+            this.bookPublicAppointmentHandler,
+            new BookPublicAppointmentCommand(
+                body.patient,
+                body.serviceCatalogId,
+                body.staffProfileId,
+                body.scheduledAt,
+                body.appointmentType as AppointmentType | undefined,
+                body.notes,
             ),
         );
 

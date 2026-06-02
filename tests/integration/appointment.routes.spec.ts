@@ -14,6 +14,9 @@ const {
 const {
     SchedulePrismaRepository,
 } = require('../../src/modules/schedules/infrastructure/schedule.prisma.repository');
+const {
+    PatientPrismaRepository,
+} = require('../../src/modules/patients/infrastructure/patient.prisma.repository');
 
 const patientId = '35974dde-783f-43a1-bcab-117d754f81e1';
 const departmentId = '8d1dbd2c-b5c4-4d8f-b75b-e8a2dce8f30e';
@@ -73,6 +76,27 @@ const appointment = {
         defaultPrice: 50,
     },
     department,
+};
+
+const patientProfile = {
+    id: patientId,
+    userId: null,
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    email: 'ada@medsphere.local',
+    phone: '+38344111222',
+    dateOfBirth: new Date('1990-01-01T00:00:00.000Z'),
+    gender: 'female',
+    bloodType: null,
+    personalNumber: '1234567890',
+    address: null,
+    emergencyContact: null,
+    emergencyPhone: null,
+    allergies: null,
+    medicalNotes: null,
+    isActive: true,
+    createdAt: new Date('2026-05-19T08:00:00.000Z'),
+    updatedAt: new Date('2026-05-19T08:00:00.000Z'),
 };
 
 function createAccessToken(permissions: string[]) {
@@ -185,6 +209,80 @@ describe('Appointment routes', () => {
                 serviceCatalogId: serviceId,
                 staffProfileId,
                 notes: 'New patient',
+            }),
+        );
+    });
+
+    it('books a public appointment without an auth token', async () => {
+        jest.spyOn(PatientPrismaRepository.prototype, 'findByPersonalNumberHash').mockResolvedValue(null);
+        jest.spyOn(PatientPrismaRepository.prototype, 'findByEmail').mockResolvedValue(null);
+        jest.spyOn(PatientPrismaRepository.prototype, 'create').mockResolvedValue(patientProfile);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById').mockResolvedValue(patient);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'countConflictingAppointments')
+            .mockResolvedValue(0);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'create').mockResolvedValue(appointment);
+        mockAvailabilityDependencies();
+
+        const response = await request(app)
+            .post('/api/public/appointments')
+            .send({
+                patient: {
+                    firstName: 'Ada',
+                    lastName: 'Lovelace',
+                    email: 'ada@medsphere.local',
+                    phone: '+38344111222',
+                    personalNumber: '1234567890',
+                    dateOfBirth: '1990-01-01',
+                    gender: 'female',
+                },
+                serviceCatalogId: serviceId,
+                staffProfileId,
+                scheduledAt: scheduledAt.toISOString(),
+                notes: 'Website request',
+            });
+
+        expect(response.status).toBe(201);
+        expect(response.body.id).toBe(appointmentId);
+        expect(PatientPrismaRepository.prototype.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                firstName: 'Ada',
+                lastName: 'Lovelace',
+                email: 'ada@medsphere.local',
+                phone: '+38344111222',
+                personalNumber: expect.stringMatching(/^enc:/),
+                personalNumberHash: expect.any(String),
+            }),
+        );
+        expect(AppointmentPrismaRepository.prototype.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                patientId,
+                serviceCatalogId: serviceId,
+                staffProfileId,
+                notes: 'Website request',
             }),
         );
     });

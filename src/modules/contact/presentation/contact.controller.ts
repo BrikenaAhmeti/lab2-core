@@ -9,6 +9,8 @@ import { SubmitContactMessageHandler } from '../application/handlers/submit-cont
 import { UpdateContactMessageStatusHandler } from '../application/handlers/update-contact-message-status.handler';
 import { ListContactMessagesQuery } from '../application/queries/list-contact-messages.query';
 import { ContactMessageStatus } from '../domain/contact.entity';
+import { AuthContactEmailEventPublisher } from '../infrastructure/auth-contact-email-event.publisher';
+import { CompositeContactEventPublisher } from '../infrastructure/composite-contact-event.publisher';
 import { ContactPrismaRepository } from '../infrastructure/contact.prisma.repository';
 import { NotificationContactEventPublisher } from '../infrastructure/notification-contact-event.publisher';
 import { ContactService } from '../services/contact.service';
@@ -43,7 +45,10 @@ export class ContactController {
     private readonly queryBus = new QueryBus();
     private readonly service = new ContactService(
         new ContactPrismaRepository(),
-        new NotificationContactEventPublisher(),
+        new CompositeContactEventPublisher([
+            new NotificationContactEventPublisher(),
+            new AuthContactEmailEventPublisher(),
+        ]),
     );
     private readonly submitContactHandler = new SubmitContactMessageHandler(
         this.service,

@@ -1,12 +1,26 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../../shared/middleware/auth.middleware';
 import { requirePermission } from '../../../shared/middleware/require-permission';
-import { staffScheduleRoutes } from '../../schedules/presentation/schedule.routes';
+import {
+    publicStaffScheduleRoutes,
+    staffScheduleRoutes,
+} from '../../schedules/presentation/schedule.routes';
 import { StaffController } from './staff.controller';
 
 const controller = new StaffController();
 
 export const staffRoutes = Router();
+export const publicStaffRoutes = Router();
+
+publicStaffRoutes.get('/', async (req, res, next) => {
+    try {
+        await controller.listPublic(req, res);
+    } catch (error) {
+        next(error);
+    }
+});
+
+publicStaffRoutes.use('/:id', publicStaffScheduleRoutes);
 
 staffRoutes.get('/public', async (req, res, next) => {
     try {

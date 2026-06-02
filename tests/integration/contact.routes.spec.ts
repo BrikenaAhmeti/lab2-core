@@ -5,6 +5,9 @@ import { ContactMessageView } from '../../src/modules/contact/domain/contact.ent
 process.env.NODE_ENV = 'test';
 process.env.JWT_ACCESS_SECRET = 'contact-routes-test-secret';
 process.env.FRONTEND_ORIGINS = '';
+process.env.INTERNAL_API_KEY = 'contact-routes-internal-key';
+process.env.AUTH_SERVICE_URL = 'http://auth.local';
+process.env.NOTIFICATION_SERVICE_URL = '';
 
 const { createApp } = require('../../src/app');
 const {
@@ -49,6 +52,17 @@ describe('Contact routes', () => {
         jest.restoreAllMocks();
     });
 
+    it('allows contact requests from the current local frontend origin', async () => {
+        const response = await request(app)
+            .options('/api/contact')
+            .set('Origin', 'http://localhost:3002')
+            .set('Access-Control-Request-Method', 'POST');
+
+        expect(response.status).toBe(204);
+        expect(response.headers['access-control-allow-origin']).toBe('http://localhost:3002');
+        expect(response.headers['access-control-allow-credentials']).toBe('true');
+    });
+
     it('accepts public contact form submissions', async () => {
         const createSpy = jest
             .spyOn(ContactPrismaRepository.prototype, 'createMessage')
@@ -57,6 +71,10 @@ describe('Contact routes', () => {
             ContactPrismaRepository.prototype,
             'findAdminNotificationUserIds',
         ).mockResolvedValue([adminUserId]);
+        const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+            ok: true,
+            json: async () => ({ success: true }),
+        } as Response);
 
         const response = await request(app)
             .post('/api/contact')
@@ -76,6 +94,21 @@ describe('Contact routes', () => {
             phone: '+38344111222',
             subject: 'Appointment question',
             message: 'Can I move my appointment?',
+        });
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        const [url, options] = fetchSpy.mock.calls[0];
+        expect(String(url)).toBe('http://auth.local/internal/auth/contact-acknowledgement');
+        expect(options?.method).toBe('POST');
+        expect(options?.headers).toEqual(
+            expect.objectContaining({
+                'content-type': 'application/json',
+                'x-internal-api-key': 'contact-routes-internal-key',
+            }),
+        );
+        expect(JSON.parse(options?.body as string)).toEqual({
+            name: 'Ada Lovelace',
+            email: 'ada@example.com',
+            subject: 'Appointment question',
         });
     });
 

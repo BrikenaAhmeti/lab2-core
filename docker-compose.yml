@@ -81,12 +81,13 @@ services:
       PORT: 3007
       DATABASE_URL: postgresql://${POSTGRES_USER:-medsphere}:${POSTGRES_PASSWORD:-medsphere}@postgres:5432/${POSTGRES_DB:-department_service}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-replace-with-auth-service-access-secret}
-      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5173}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:5173,http://localhost:3002}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       AUDIT_LOGGING_ENABLED: ${AUDIT_LOGGING_ENABLED:-true}
       SENTRY_DSN: ${SENTRY_DSN:-}
       REDIS_URL: redis://:${REDIS_PASSWORD:-medsphere_redis_password}@redis:6379
       MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-medsphere}:${MONGO_ROOT_PASSWORD:-medsphere}@mongodb:27017/${MONGO_DATABASE:-medsphere}?authSource=admin
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL_DOCKER:-http://host.docker.internal:3005}
       AI_SERVICE_URL: ${AI_SERVICE_URL_DOCKER:-http://host.docker.internal:3010}
       NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL_DOCKER:-http://host.docker.internal:3008}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-replace-with-shared-internal-service-key}

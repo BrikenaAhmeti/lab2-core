@@ -11,6 +11,7 @@ export const env = {
     redisUrl: process.env.REDIS_URL || '',
     mongodbUri: process.env.MONGODB_URI || '',
     internalApiKey: process.env.INTERNAL_API_KEY || '',
+    authServiceUrl: process.env.AUTH_SERVICE_URL || '',
     aiServiceUrl: process.env.AI_SERVICE_URL || '',
     notificationServiceUrl: process.env.NOTIFICATION_SERVICE_URL || '',
     logLevel: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'silent' : 'info'),

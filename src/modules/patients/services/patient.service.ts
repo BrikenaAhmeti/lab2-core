@@ -231,6 +231,124 @@ export class PatientService {
         return this.patientRepository.getTimeline(patientId);
     }
 
+    async findOrCreatePublicPatient(data: {
+        firstName: string;
+        lastName: string;
+        email: string;
+        phone: string;
+        dateOfBirth: Date;
+        gender: string;
+        personalNumber: string;
+    }) {
+        const email = normalizeEmail(data.email);
+        const phone = normalizeOptionalText(data.phone);
+        const gender = normalizeOptionalText(data.gender);
+        const personalNumber = normalizePersonalNumber(data.personalNumber);
+        const personalNumberHash = hashPersonalNumber(personalNumber);
+
+        if (!email) {
+            throw new AppError('Patient email is required', 400);
+        }
+
+        if (!phone) {
+            throw new AppError('Patient phone number is required', 400);
+        }
+
+        if (!gender) {
+            throw new AppError('Patient gender is required', 400);
+        }
+
+        if (!personalNumberHash) {
+            throw new AppError('Personal number is required', 400);
+        }
+
+        const [existingByPersonalNumber, existingByEmail] = await Promise.all([
+            this.patientRepository.findByPersonalNumberHash(personalNumberHash),
+            this.patientRepository.findByEmail(email),
+        ]);
+
+        if (
+            existingByPersonalNumber &&
+            existingByEmail &&
+            existingByPersonalNumber.id !== existingByEmail.id
+        ) {
+            throw new AppError(
+                'Patient email is already registered to another profile',
+                409,
+            );
+        }
+
+        if (existingByPersonalNumber) {
+            if (
+                existingByPersonalNumber.email &&
+                existingByPersonalNumber.email.toLowerCase() !== email
+            ) {
+                throw new AppError(
+                    'Patient personal number already registered with a different email',
+                    409,
+                );
+            }
+
+            const updateData: UpdatePatientData = {};
+
+            if (!existingByPersonalNumber.email) {
+                updateData.email = email;
+            }
+
+            if (!existingByPersonalNumber.phone) {
+                updateData.phone = phone;
+            }
+
+            if (!existingByPersonalNumber.dateOfBirth) {
+                updateData.dateOfBirth = data.dateOfBirth;
+            }
+
+            if (!existingByPersonalNumber.gender) {
+                updateData.gender = gender;
+            }
+
+            if (Object.keys(updateData).length > 0) {
+                return this.patientRepository.update(
+                    existingByPersonalNumber.id,
+                    updateData,
+                );
+            }
+
+            return existingByPersonalNumber;
+        }
+
+        if (existingByEmail) {
+            if (existingByEmail.personalNumber) {
+                throw new AppError(
+                    'Patient email already registered with a different personal number',
+                    409,
+                );
+            }
+
+            return this.patientRepository.update(existingByEmail.id, {
+                firstName: this.requiredText(data.firstName, 'First name'),
+                lastName: this.requiredText(data.lastName, 'Last name'),
+                phone,
+                dateOfBirth: data.dateOfBirth,
+                gender,
+                personalNumber: encryptPersonalNumber(personalNumber),
+                personalNumberHash,
+            });
+        }
+
+        return this.patientRepository.create({
+            userId: null,
+            firstName: this.requiredText(data.firstName, 'First name'),
+            lastName: this.requiredText(data.lastName, 'Last name'),
+            email,
+            phone,
+            dateOfBirth: data.dateOfBirth,
+            gender,
+            personalNumber: encryptPersonalNumber(personalNumber),
+            personalNumberHash,
+        });
+    }
+
     async linkByPersonalNumber(userId: string, rawPersonalNumber: string) {
         const personalNumber = normalizePersonalNumber(rawPersonalNumber);
         const personalNumberHash = hashPersonalNumber(personalNumber);

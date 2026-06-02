@@ -6,6 +6,15 @@ import { requirePermission } from '../../../shared/middleware/require-permission
 const controller = new ServiceCatalogController();
 
 export const serviceCatalogRoutes = Router();
+export const publicServiceCatalogRoutes = Router();
+
+publicServiceCatalogRoutes.get('/', async (req, res, next) => {
+    try {
+        await controller.list(req, res);
+    } catch (error) {
+        next(error);
+    }
+});
 
 /**
  * @openapi

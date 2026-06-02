@@ -45,6 +45,7 @@ function buildAuditLogData(auditEntry: SettingAuditEntry, auditContext: AuditCon
         performedByUserId: auditContext.performedByUserId ?? null,
         ipAddress: auditContext.ipAddress ?? null,
         userAgent: auditContext.userAgent ?? null,
+        requestId: auditContext.requestId ?? null,
         oldValue: toAuditJsonValue(auditEntry.previousValue),
         newValue: toAuditJsonValue(auditEntry.nextValue),
         metadata: {
@@ -59,6 +60,13 @@ function buildAuditLogData(auditEntry: SettingAuditEntry, auditContext: AuditCon
 export class SettingPrismaRepository implements SettingRepository {
     async findAll(): Promise<Setting[]> {
         return prisma.setting.findMany({
+            orderBy: [{ key: 'asc' }],
+        });
+    }
+
+    async findPublic(): Promise<Setting[]> {
+        return prisma.setting.findMany({
+            where: { isPublic: true },
             orderBy: [{ key: 'asc' }],
         });
     }

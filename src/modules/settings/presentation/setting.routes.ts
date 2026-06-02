@@ -7,6 +7,15 @@ import { SettingController } from './setting.controller';
 const controller = new SettingController();
 
 export const settingRoutes = Router();
+export const publicSettingRoutes = Router();
+
+publicSettingRoutes.get('/', async (req, res, next) => {
+    try {
+        await controller.listPublic(req, res);
+    } catch (error) {
+        next(error);
+    }
+});
 
 /**
  * @openapi

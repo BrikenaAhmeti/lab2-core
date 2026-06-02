@@ -2678,6 +2678,16 @@ const paths = {
             },
         }),
     },
+    '/api/public/settings': {
+        get: operation({
+            tags: ['Settings'],
+            summary: 'Get public website settings grouped by category',
+            security: [],
+            responses: {
+                200: jsonResponse('Public grouped settings', ref('GroupedSettingsResponse')),
+            },
+        }),
+    },
     '/api/settings/bulk': {
         put: operation({
             tags: ['Settings'],

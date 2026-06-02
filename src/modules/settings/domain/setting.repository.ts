@@ -4,6 +4,7 @@ export type AuditContext = {
     performedByUserId?: string;
     ipAddress?: string;
     userAgent?: string;
+    requestId?: string;
 };
 
 export type SettingAuditEntry = {
@@ -16,6 +17,7 @@ export type SettingAuditEntry = {
 
 export interface SettingRepository {
     findAll(): Promise<Setting[]>;
+    findPublic(): Promise<Setting[]>;
     findByKey(key: string): Promise<Setting | null>;
     findByKeys(keys: string[]): Promise<Setting[]>;
     updateWithAudit(

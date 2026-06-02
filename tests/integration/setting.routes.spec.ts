@@ -34,6 +34,12 @@ const reminderSetting = {
     updatedBy: null,
 };
 
+const publicFacilityNameSetting = {
+    ...facilityNameSetting,
+    id: '2e9ca847-2cc2-4d31-b483-b7c87888d572',
+    isPublic: true,
+};
+
 function createAccessToken(permissions: string[], roles: string[] = ['Admin']) {
     return jwt.sign(
         {
@@ -67,6 +73,22 @@ describe('Setting routes', () => {
         expect(response.body.facility.settings[0].key).toBe('facility_name');
         expect(response.body.notifications.settings[0].key).toBe(
             'appointment_reminder_24h',
+        );
+    });
+
+    it('should list public settings without authentication', async () => {
+        jest.spyOn(SettingPrismaRepository.prototype, 'findPublic').mockResolvedValue([
+            publicFacilityNameSetting,
+        ]);
+
+        const response = await request(app).get('/api/public/settings');
+
+        expect(response.status).toBe(200);
+        expect(response.body.facility.settings[0]).toEqual(
+            expect.objectContaining({
+                key: 'facility_name',
+                isPublic: true,
+            }),
         );
     });
 

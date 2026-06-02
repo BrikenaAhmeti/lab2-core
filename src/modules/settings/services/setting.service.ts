@@ -54,6 +54,9 @@ export class SettingService {
     private cachedGroupedSettings:
         | { expiresAt: number; value: GroupedSettingsResponse }
         | null = null;
+    private cachedPublicSettings:
+        | { expiresAt: number; value: GroupedSettingsResponse }
+        | null = null;
 
     constructor(private readonly settingRepository: SettingRepository) { }
 
@@ -69,6 +72,25 @@ export class SettingService {
         const grouped = this.groupSettings(settings);
 
         this.cachedGroupedSettings = {
+            value: grouped,
+            expiresAt: Date.now() + CACHE_TTL_MS,
+        };
+
+        return grouped;
+    }
+
+    async getPublicSettings(): Promise<GroupedSettingsResponse> {
+        if (
+            this.cachedPublicSettings &&
+            this.cachedPublicSettings.expiresAt > Date.now()
+        ) {
+            return this.cachedPublicSettings.value;
+        }
+
+        const settings = await this.settingRepository.findPublic();
+        const grouped = this.groupSettings(settings);
+
+        this.cachedPublicSettings = {
             value: grouped,
             expiresAt: Date.now() + CACHE_TTL_MS,
         };
@@ -261,5 +283,6 @@ export class SettingService {
 
     private invalidateCache() {
         this.cachedGroupedSettings = null;
+        this.cachedPublicSettings = null;
     }
 }

@@ -1,136 +1,161 @@
-# department-service
+# MedSphere Core Service
 
-`department-service` is a standalone MedSphere microservice responsible only for department data and department business rules. It follows the same Express, TypeScript, Prisma, Zod, Jest, and JWT middleware conventions as the existing auth service, while keeping auth ownership out of this codebase.
+Main clinical and operations API for the Lab2 MedSphere platform. It owns the shared healthcare domain: departments, service catalog, staff, schedules, patients, appointments, medical records, prescriptions, lab, billing, pharmacy, inventory, reports, search, import/export, feedback, contact messages, settings, dashboard stats, and audit logs.
 
-## Stack
+Auth, CMS, Notifications, and AI live in separate Lab2 services. Core verifies Auth-issued JWTs and calls other services through internal API keys when needed.
 
-- Node.js
-- Express
-- TypeScript
-- Prisma + PostgreSQL
-- Zod validation
-- Jest + Supertest
-- CQRS-style flow: `Controller -> Command/Query -> Handler -> Service -> Repository -> Prisma`
+## Port
 
-## Project structure
+- Local and Docker API: `http://localhost:3007`
+- Container port: `3007`
+- Health: `GET /health`
+- API base path: `/api`
 
-- `src/app.ts` and `src/server.ts` wire the HTTP app
-- `src/config/env.ts` centralizes env access
-- `src/shared` contains buses, errors, JWT verification, and middleware
-- `src/modules/departments` contains the full department module
-- `prisma/schema.prisma` defines the database models
-- `prisma/seed.ts` seeds only department-service permission metadata
-- `tests/unit` and `tests/integration` cover service, handler, and route behavior
+## Data Stores
 
-## Environment
+- PostgreSQL via Prisma for core domain data.
+- Redis for distributed appointment slot locks.
+- MongoDB for saved report templates.
 
-Copy `.env.example` and provide:
+Docker Compose starts Postgres, Redis, MongoDB, a one-time migration container, and the Core Service.
 
-- `PORT`
+## Environment Keys
+
+Copy `.env.example` to `.env`.
+
+Service keys:
+
 - `NODE_ENV`
-- `DATABASE_URL`
+- `PORT`
+- `LOG_LEVEL`
+- `AUDIT_LOGGING_ENABLED`
+- `SENTRY_DSN`
 - `JWT_ACCESS_SECRET`
+- `PATIENT_DATA_ENCRYPTION_KEY`
 - `FRONTEND_ORIGINS`
-- `REDIS_URL` for distributed appointment slot locks; without it the service falls back to in-memory locks
-- `MONGODB_URI` for report template persistence; without it report templates are kept in memory
-- `INTERNAL_API_KEY` for internal endpoints, notification-service calls, and AI-service background jobs
-- `AI_SERVICE_URL` if automatic lab-result AI interpretation should be enabled
-- `NOTIFICATION_SERVICE_URL` if notification delivery should be enabled
-- `SENTRY_DSN` if backend error tracking should be enabled
+- `INTERNAL_API_KEY`
+- `AUTH_SERVICE_URL`
+- `AI_SERVICE_URL`
+- `NOTIFICATION_SERVICE_URL`
+- `DATABASE_URL`
+- `REDIS_URL`
+- `MONGODB_URI`
 
-## Scripts
+Docker/Postgres/Redis/Mongo helper keys:
 
-- `npm run dev` starts the service with hot reload
-- `npm run build` compiles TypeScript
-- `npm run start` runs the compiled build
-- `npm test` runs all tests
-- `npm run test:unit` runs unit tests only
-- `npm run test:integration` runs integration tests only
-- `npm run prisma:generate` generates Prisma client
-- `npm run prisma:migrate` creates/applies local migrations
-- `npm run prisma:migrate:deploy` applies existing migrations, used by Docker
-- `npm run seed` seeds department permission definitions
-- `npm run docker:up` builds and starts the service with Postgres, Redis, and MongoDB
-- `npm run docker:down` stops the full Docker stack
-- `npm run docker:infra` starts only Postgres, Redis, and MongoDB for local service development
-- `npm run docker:infra:down` stops the local infrastructure stack
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_DB`
+- `POSTGRES_PORT`
+- `REDIS_PASSWORD`
+- `REDIS_PORT`
+- `MONGO_ROOT_USERNAME`
+- `MONGO_ROOT_PASSWORD`
+- `MONGO_DATABASE`
+- `MONGO_PORT`
+- `CORE_SERVICE_PORT`
+- `AUTH_SERVICE_URL_DOCKER`
+- `AI_SERVICE_URL_DOCKER`
+- `NOTIFICATION_SERVICE_URL_DOCKER`
 
-## Docker
+## Start Locally
 
-The repo includes Docker support for this service and the shared infrastructure required by the MedSphere sprint plan.
+```bash
+npm install
+cp .env.example .env
+npm run docker:infra
+npm run prisma:generate
+npm run prisma:migrate
+npm run seed
+npm run dev
+```
 
-Full stack for this repo:
+Stop only local infrastructure:
+
+```bash
+npm run docker:infra:down
+```
+
+## Run With Docker
 
 ```bash
 cp .env.example .env
 npm run docker:up
 ```
 
-This starts:
-
-- `postgres` with a persistent `postgres_data` volume
-- `redis` with password auth and append-only persistence
-- `mongodb` with a persistent `mongodb_data` volume
-- `core-service-migrate`, a one-time migration container
-- `core-service`, exposed on `http://localhost:3007`
-
-Health check:
+Stop the stack:
 
 ```bash
-curl http://localhost:3007/health
+npm run docker:down
 ```
 
-For development, start only infrastructure and run the service natively:
+Docker starts Postgres, Redis, MongoDB, runs `prisma migrate deploy`, then starts the Core Service.
+
+## Build And Tests
 
 ```bash
-npm run docker:infra
+npm run build
+npm run test
+```
+
+Additional test commands:
+
+```bash
+npm run test:unit
+npm run test:integration
+```
+
+Useful Prisma commands:
+
+```bash
+npm run prisma:generate
 npm run prisma:migrate
-npm run dev
+npm run prisma:migrate:deploy
+npm run prisma:studio
+npm run seed
 ```
 
-Inside Docker, service-to-service URLs use container names. For example, `DATABASE_URL` points to `postgres:5432`, not `localhost:5432`.
+## Swagger
 
-## Auth compatibility
+- Swagger UI: `http://localhost:3007/api/docs`
+- OpenAPI JSON: `http://localhost:3007/api/docs.json`
 
-This service does not implement login, registration, refresh tokens, password reset, or user storage.
+Swagger covers the current Core routes for health, departments, services, staff, schedules, patients, appointments, medical records, prescriptions, lab tests/orders, billing, pharmacy, inventory, dashboard, reports, search, data exchange, feedback, contact, settings, audit logs, and internal appointment/patient endpoints.
 
-It trusts Bearer access tokens issued by the auth service:
+## Main Route Groups
 
-- Header format: `Authorization: Bearer <token>`
-- Secret: `JWT_ACCESS_SECRET`
-- Payload:
-  - `sub: string`
-  - `email: string`
-  - `roles: string[]`
-  - `permissions: string[]`
-
-The middleware attaches:
-
-```ts
-req.user = {
-    id: payload.sub,
-    email: payload.email,
-    roles: payload.roles,
-    permissions: payload.permissions,
-};
-```
-
-Permission checks stay compatible with the auth service and support:
-
-- `own`
-- `department`
-- `all`
-
-## Endpoints
-
-- `GET /health`
-- Swagger UI: `GET /api/docs`
-- OpenAPI JSON: `GET /api/docs.json`
-- The OpenAPI document covers the current Core Service routes for departments, services, staff, schedules, patients, appointments, medical records, prescriptions, lab, billing, pharmacy, dashboard, reports, search, data exchange, feedback, contact, settings, audit logs, and internal appointment reminders.
+- `/api/departments`
+- `/api/services`
+- `/api/staff-position-types`
+- `/api/staff`
+- `/api/public/departments`
+- `/api/public/services`
+- `/api/public/staff`
+- `/api/public/appointments`
+- `/api/public/settings`
+- `/api/patients`
+- `/api/appointments`
+- `/api/medical-records`
+- `/api/prescriptions`
+- `/api/lab-tests`
+- `/api/lab-orders`
+- `/api/billings`
+- `/api/pharmacy`
+- `/api/inventory`
+- `/api/dashboard`
+- `/api/reports`
+- `/api/search`
+- `/api/export`
+- `/api/import`
+- `/api/feedback`
+- `/api/contact`
+- `/api/settings`
+- `/api/audit-logs`
+- `/internal/appointments`
+- `/internal/patients`
 
 ## Notes
 
-- Deletes are soft deletes implemented as deactivation.
-- Department names are normalized before save and checked for duplicates case-insensitively.
-- `ServicePermission` is a lightweight local catalog so this service can seed only its own permission definitions without pulling auth business logic into the module layer.
-- This service does not call OpenAI directly and does not require `OPENAI_API_KEY`. The current lab AI endpoint returns a `not_configured` stub; production AI work should live behind the separate AI Service described in the project docs.
+- Deletes are implemented as soft deactivation where the domain requires historical records.
+- `INTERNAL_API_KEY` must match Auth, Notifications, CMS, and AI when service-to-service calls are enabled.
+- Core does not call OpenAI directly; lab interpretation is delegated to the AI Service.

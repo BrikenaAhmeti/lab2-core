@@ -40,12 +40,12 @@ const dashboardStats: DashboardStats = {
     updatedAt: new Date('2026-05-27T12:00:00.000Z'),
 };
 
-function createAccessToken(permissions: string[]) {
+function createAccessToken(permissions: string[], roles = ['Admin']) {
     return jwt.sign(
         {
             sub: '7cded68b-2455-4104-87ea-cc3b78d2aa6f',
             email: 'dashboard@medsphere.local',
-            roles: ['Admin'],
+            roles,
             permissions,
         },
         process.env.JWT_ACCESS_SECRET as string,
@@ -79,12 +79,27 @@ describe('Dashboard routes', () => {
         expect(statsSpy).toHaveBeenCalledWith(expect.any(Date));
     });
 
+    it('allows admin roles without a dashboard permission claim', async () => {
+        jest
+            .spyOn(DashboardPrismaRepository.prototype, 'getStats')
+            .mockResolvedValue(dashboardStats);
+
+        const response = await request(app)
+            .get('/api/dashboard/stats')
+            .set(
+                'Authorization',
+                `Bearer ${createAccessToken(['appointments:read:all'], ['Super Admin'])}`,
+            );
+
+        expect(response.status).toBe(200);
+    });
+
     it('requires dashboard read access', async () => {
         const response = await request(app)
             .get('/api/dashboard/stats')
             .set(
                 'Authorization',
-                `Bearer ${createAccessToken(['appointments:read:all'])}`,
+                `Bearer ${createAccessToken(['appointments:read:all'], ['Nurse'])}`,
             );
 
         expect(response.status).toBe(403);

@@ -81,6 +81,7 @@ services:
       PORT: 3007
       DATABASE_URL: postgresql://${POSTGRES_USER:-medsphere}:${POSTGRES_PASSWORD:-medsphere}@postgres:5432/${POSTGRES_DB:-department_service}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-replace-with-auth-service-access-secret}
+      PATIENT_DATA_ENCRYPTION_KEY: ${PATIENT_DATA_ENCRYPTION_KEY:-replace-with-patient-data-encryption-key}
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:3002,http://127.0.0.1:3002}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       AUDIT_LOGGING_ENABLED: ${AUDIT_LOGGING_ENABLED:-true}

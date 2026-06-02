@@ -42,10 +42,9 @@ const VALID_STATUS_TRANSITIONS: Record<AppointmentStatus, AppointmentStatus[]> =
     [AppointmentStatus.NO_SHOW]: [],
 };
 
-const FINAL_STATUSES = new Set<AppointmentStatus>([
+const NON_RESCHEDULABLE_STATUSES = new Set<AppointmentStatus>([
     AppointmentStatus.COMPLETED,
     AppointmentStatus.CANCELLED,
-    AppointmentStatus.NO_SHOW,
 ]);
 
 function addMinutes(date: Date, minutes: number) {
@@ -199,7 +198,7 @@ export class AppointmentService {
     ) {
         const appointment = await this.getAppointmentById(id);
 
-        if (FINAL_STATUSES.has(appointment.status)) {
+        if (NON_RESCHEDULABLE_STATUSES.has(appointment.status)) {
             throw new AppError('Finalized appointments cannot be rescheduled', 422);
         }
 

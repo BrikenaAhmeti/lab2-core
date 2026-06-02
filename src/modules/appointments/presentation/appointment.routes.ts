@@ -111,7 +111,6 @@ appointmentRoutes.put(
 appointmentRoutes.patch(
     '/:id',
     authMiddleware,
-    requirePermission('appointments:update'),
     async (req, res, next) => {
         try {
             await controller.reschedule(req, res);

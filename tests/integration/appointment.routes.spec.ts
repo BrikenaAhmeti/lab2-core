@@ -471,6 +471,7 @@ describe('Appointment routes', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0].doctorId).toBe(staffProfileId);
         expect(response.body.items[0].doctor).toEqual(expect.objectContaining({
             id: staffProfileId,
             specialty: 'Cardiologist',
@@ -571,6 +572,91 @@ describe('Appointment routes', () => {
             appointmentId,
             expect.objectContaining({
                 status: AppointmentStatus.CONFIRMED,
+            }),
+        );
+    });
+
+    it('cancels an appointment with the mobile status payload', async () => {
+        const updateStatusSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'updateStatus')
+            .mockResolvedValue({
+                ...appointment,
+                status: AppointmentStatus.CANCELLED,
+                cancelledAt: new Date('2030-01-01T08:00:00.000Z'),
+                cancellationNote: 'Cancelled by user',
+            });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findById').mockResolvedValue(appointment);
+
+        const response = await request(app)
+            .patch(`/api/appointments/${appointmentId}/status`)
+            .set('Authorization', `Bearer ${createAccessToken([], patient.userId!)}`)
+            .send({ status: 'CANCELLED' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe(AppointmentStatus.CANCELLED);
+        expect(updateStatusSpy).toHaveBeenCalledWith(
+            appointmentId,
+            expect.objectContaining({
+                status: AppointmentStatus.CANCELLED,
+                cancellationNote: 'Cancelled by user',
+            }),
+        );
+    });
+
+    it('reschedules an own appointment with the mobile date payload', async () => {
+        const newStart = new Date('2030-01-02T09:30:00.000Z');
+        const newEnd = new Date('2030-01-02T10:00:00.000Z');
+        const rescheduleSpy = jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'reschedule')
+            .mockResolvedValue({
+                ...appointment,
+                scheduledAt: newStart,
+                endAt: newEnd,
+            });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findById').mockResolvedValue(appointment);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'countConflictingAppointments')
+            .mockResolvedValue(0);
+        mockAvailabilityDependencies();
+
+        const response = await request(app)
+            .patch(`/api/appointments/${appointmentId}`)
+            .set('Authorization', `Bearer ${createAccessToken([], patient.userId!)}`)
+            .send({ date: newStart.toISOString() });
+
+        expect(response.status).toBe(200);
+        expect(response.body.id).toBe(appointmentId);
+        expect(response.body.doctorId).toBe(staffProfileId);
+        expect(response.body.date).toBe(newStart.toISOString());
+        expect(rescheduleSpy).toHaveBeenCalledWith(
+            appointmentId,
+            expect.objectContaining({
+                staffProfileId,
+                scheduledAt: newStart,
+                endAt: newEnd,
             }),
         );
     });

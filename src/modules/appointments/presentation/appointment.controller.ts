@@ -124,11 +124,14 @@ const reminderCandidatesQuerySchema = z
     });
 
 const rescheduleAppointmentBodySchema = z.object({
-    scheduledAt: dateTimeSchema,
+    scheduledAt: dateTimeSchema.optional(),
+    date: dateTimeSchema.optional(),
     serviceCatalogId: z.string().uuid('Invalid service id').optional(),
     staffProfileId: z.string().uuid('Invalid staff profile id').optional(),
     appointmentType: z.enum(appointmentTypeValues).optional(),
     notes: z.string().trim().max(1000).nullable().optional(),
+}).refine((body) => body.scheduledAt || body.date, {
+    message: 'scheduledAt or date is required',
 });
 
 const statusActionSchema = z.enum([
@@ -405,11 +408,26 @@ export class AppointmentController {
     async reschedule(req: Request, res: Response) {
         const params = idParamsSchema.parse(req.params);
         const body = rescheduleAppointmentBodySchema.parse(req.body);
+        const appointment = await this.queryBus.execute(
+            this.getAppointmentByIdHandler,
+            new GetAppointmentByIdQuery(params.id),
+        );
+
+        if (!canAccessAppointment(req, appointment, 'appointments:update')) {
+            throw new AppError('Forbidden', 403);
+        }
+
+        if (!hasPermission(req, 'appointments:update') && appointment.patient.userId === req.user?.id) {
+            if (body.serviceCatalogId || body.staffProfileId || body.appointmentType || body.notes !== undefined) {
+                throw new AppError('Patients can only reschedule their own appointment date', 403);
+            }
+        }
+
         const result = await this.commandBus.execute(
             this.rescheduleAppointmentHandler,
             new RescheduleAppointmentCommand(
                 params.id,
-                body.scheduledAt,
+                body.scheduledAt ?? body.date!,
                 body.serviceCatalogId,
                 body.staffProfileId,
                 body.appointmentType as AppointmentType | undefined,
@@ -418,7 +436,7 @@ export class AppointmentController {
             ),
         );
 
-        return res.status(200).json(result);
+        return res.status(200).json(toMobileAppointment(result));
     }
 
     async updateStatus(req: Request, res: Response) {
@@ -449,7 +467,9 @@ export class AppointmentController {
             new UpdateAppointmentStatusCommand(
                 params.id,
                 status,
-                body.reason,
+                status === AppointmentStatus.CANCELLED
+                    ? body.reason ?? 'Cancelled by user'
+                    : body.reason,
                 req.user?.id,
             ),
         );

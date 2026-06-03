@@ -454,7 +454,7 @@ export class AppointmentPrismaRepository implements AppointmentRepository {
                     gt: filters.scheduledAt,
                 },
                 status: {
-                    notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW],
+                    in: [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED],
                 },
             },
         });

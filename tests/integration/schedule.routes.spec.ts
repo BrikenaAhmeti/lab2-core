@@ -201,6 +201,9 @@ describe('Schedule routes', () => {
             .spyOn(SchedulePrismaRepository.prototype, 'listSchedulesForDay')
             .mockResolvedValue([schedule]);
         jest
+            .spyOn(SchedulePrismaRepository.prototype, 'listWeeklySchedules')
+            .mockResolvedValue([schedule]);
+        jest
             .spyOn(SchedulePrismaRepository.prototype, 'listExceptionsForDate')
             .mockResolvedValue([]);
         jest
@@ -223,5 +226,57 @@ describe('Schedule routes', () => {
             '09:00',
             '10:30',
         ]);
+    });
+
+    it('returns default slots when a bookable doctor has no saved schedule', async () => {
+        jest.spyOn(SchedulePrismaRepository.prototype, 'findStaffById').mockResolvedValue(
+            staff,
+        );
+        jest.spyOn(SchedulePrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            defaultDurationMinutes: 30,
+            isActive: true,
+        });
+        jest
+            .spyOn(SchedulePrismaRepository.prototype, 'listSchedulesForDay')
+            .mockResolvedValue([]);
+        jest
+            .spyOn(SchedulePrismaRepository.prototype, 'listWeeklySchedules')
+            .mockResolvedValue([]);
+        jest
+            .spyOn(SchedulePrismaRepository.prototype, 'listExceptionsForDate')
+            .mockResolvedValue([]);
+        jest
+            .spyOn(SchedulePrismaRepository.prototype, 'listBookedAppointments')
+            .mockResolvedValue([
+                {
+                    scheduledAt: new Date('2026-05-18T08:30:00.000Z'),
+                    endAt: new Date('2026-05-18T09:00:00.000Z'),
+                },
+            ]);
+
+        const response = await request(app)
+            .get(
+                `/api/staff/${staffProfileId}/available-slots?date=2026-05-18&serviceId=${serviceId}`,
+            )
+            .set('Authorization', `Bearer ${createAccessToken(['staff:read'])}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.slots[0]).toEqual(
+            expect.objectContaining({
+                startTime: '08:00',
+                endTime: '08:30',
+            }),
+        );
+        expect(response.body.slots.map((slot: { startTime: string }) => slot.startTime))
+            .not
+            .toContain('08:30');
+        expect(response.body.slots.at(-1)).toEqual(
+            expect.objectContaining({
+                startTime: '16:30',
+                endTime: '17:00',
+            }),
+        );
     });
 });

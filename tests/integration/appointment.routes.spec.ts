@@ -42,6 +42,16 @@ const patient = {
     name: 'Ada Lovelace',
 };
 
+const secondPatient = {
+    id: '45974dde-783f-43a1-bcab-117d754f81e2',
+    userId: 'c9fc5d6a-1af8-49a2-8467-2a60ceef7058',
+    firstName: 'Grace',
+    lastName: 'Hopper',
+    email: 'grace@medsphere.local',
+    phone: '+38344111333',
+    name: 'Grace Hopper',
+};
+
 const appointment = {
     id: appointmentId,
     patientId,
@@ -130,6 +140,24 @@ function mockAvailabilityDependencies() {
         isActive: true,
     });
     jest.spyOn(SchedulePrismaRepository.prototype, 'listSchedulesForDay').mockResolvedValue([
+        {
+            id: 'schedule-1',
+            staffProfileId,
+            departmentId,
+            dayOfWeek: scheduledAt.getUTCDay(),
+            startTime: '09:00',
+            endTime: '10:00',
+            slotDurationMinutes: 30,
+            breakStart: null,
+            breakEnd: null,
+            validFrom: null,
+            validTo: null,
+            isActive: true,
+            createdAt: new Date('2026-05-19T08:00:00.000Z'),
+            updatedAt: new Date('2026-05-19T08:00:00.000Z'),
+        },
+    ]);
+    jest.spyOn(SchedulePrismaRepository.prototype, 'listWeeklySchedules').mockResolvedValue([
         {
             id: 'schedule-1',
             staffProfileId,
@@ -316,6 +344,275 @@ describe('Appointment routes', () => {
             }),
         );
         expect(findPatientByUserIdSpy).toHaveBeenCalledWith(patient.userId);
+    });
+
+    it('books a default-schedule slot for a mobile doctor with no usable saved schedule', async () => {
+        const mobileScheduledAt = new Date('2026-06-08T12:30:00.000Z');
+        const mobileEndAt = new Date('2026-06-08T13:00:00.000Z');
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById')
+            .mockResolvedValue(patient);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientByUserId')
+            .mockResolvedValue(patient);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findDefaultServiceForStaff').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffByIdOrUserId').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'countConflictingAppointments')
+            .mockResolvedValue(0);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'create').mockResolvedValue({
+            ...appointment,
+            scheduledAt: mobileScheduledAt,
+            endAt: mobileEndAt,
+            notes: 'General consultation',
+        });
+        jest.spyOn(SchedulePrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfileId,
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest.spyOn(SchedulePrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            defaultDurationMinutes: 30,
+            isActive: true,
+        });
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listSchedulesForDay')
+            .mockResolvedValue([]);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listWeeklySchedules')
+            .mockResolvedValue([
+                {
+                    id: 'inactive-schedule',
+                    staffProfileId,
+                    departmentId,
+                    dayOfWeek: mobileScheduledAt.getUTCDay(),
+                    startTime: '08:00',
+                    endTime: '17:00',
+                    slotDurationMinutes: 30,
+                    breakStart: null,
+                    breakEnd: null,
+                    validFrom: null,
+                    validTo: null,
+                    isActive: false,
+                    createdAt: new Date('2026-05-19T08:00:00.000Z'),
+                    updatedAt: new Date('2026-05-19T08:00:00.000Z'),
+                },
+            ]);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listExceptionsForDate')
+            .mockResolvedValue([]);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listBookedAppointments')
+            .mockResolvedValue([]);
+
+        const response = await request(app)
+            .post('/api/appointments')
+            .set('Authorization', `Bearer ${createAccessToken([], patient.userId!)}`)
+            .send({
+                doctorId: staffProfileId,
+                date: mobileScheduledAt.toISOString(),
+                reason: 'General consultation',
+            });
+
+        expect(response.status).toBe(201);
+        expect(AppointmentPrismaRepository.prototype.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                scheduledAt: mobileScheduledAt,
+                endAt: mobileEndAt,
+                notes: 'General consultation',
+            }),
+        );
+    });
+
+    it('keeps booked doctor slots unavailable globally across different patients', async () => {
+        const mobileScheduledAt = new Date('2026-06-08T12:30:00.000Z');
+        const mobileEndAt = new Date('2026-06-08T13:00:00.000Z');
+        const bookedAppointments: Array<{ scheduledAt: Date; endAt: Date }> = [];
+
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById')
+            .mockImplementation(async (...args: unknown[]) => {
+                const id = args[0] as string;
+                if (id === patient.id) return patient;
+                if (id === secondPatient.id) return secondPatient;
+                return null;
+            });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientByUserId')
+            .mockImplementation(async (...args: unknown[]) => {
+                const userId = args[0] as string;
+                if (userId === patient.userId) return patient;
+                if (userId === secondPatient.userId) return secondPatient;
+                return null;
+            });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findDefaultServiceForStaff').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffByIdOrUserId').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'countConflictingAppointments')
+            .mockImplementation(async (...args: unknown[]) => {
+                const filters = args[0] as { scheduledAt: Date; endAt: Date };
+                return bookedAppointments.some(
+                    (slot) => filters.scheduledAt < slot.endAt && filters.endAt > slot.scheduledAt,
+                ) ? 1 : 0;
+            });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'create').mockImplementation(async (data: any) => {
+            bookedAppointments.push({
+                scheduledAt: data.scheduledAt,
+                endAt: data.endAt,
+            });
+
+            return {
+                ...appointment,
+                id: 'booked-by-patient-a',
+                patientId: data.patientId,
+                patient,
+                scheduledAt: data.scheduledAt,
+                endAt: data.endAt,
+                notes: data.notes,
+            };
+        });
+        jest.spyOn(SchedulePrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfileId,
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest.spyOn(SchedulePrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            defaultDurationMinutes: 30,
+            isActive: true,
+        });
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listSchedulesForDay')
+            .mockResolvedValue([]);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listWeeklySchedules')
+            .mockResolvedValue([]);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listExceptionsForDate')
+            .mockResolvedValue([]);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listBookedAppointments')
+            .mockImplementation(async () => bookedAppointments);
+
+        const userABooking = await request(app)
+            .post('/api/appointments')
+            .set('Authorization', `Bearer ${createAccessToken([], patient.userId!)}`)
+            .send({
+                doctorId: staffProfileId,
+                date: mobileScheduledAt.toISOString(),
+                reason: 'General consultation',
+            });
+
+        expect(userABooking.status).toBe(201);
+
+        const userBSlots = await request(app)
+            .get(`/api/staff/doctors/${staffProfileId}/available-slots?date=2026-06-08`);
+
+        expect(userBSlots.status).toBe(200);
+        expect(userBSlots.body.slots.map((slot: { startTime: string }) => slot.startTime))
+            .not
+            .toContain('12:30');
+
+        const userBBooking = await request(app)
+            .post('/api/appointments')
+            .set('Authorization', `Bearer ${createAccessToken([], secondPatient.userId!)}`)
+            .send({
+                doctorId: staffProfileId,
+                date: mobileScheduledAt.toISOString(),
+                reason: 'General consultation',
+            });
+
+        expect(userBBooking.status).toBe(409);
+        expect(userBBooking.body.message).toBe('This appointment slot is already booked.');
     });
 
     it('ignores patientId in the booking body and uses the authenticated patient', async () => {

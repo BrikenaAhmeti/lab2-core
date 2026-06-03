@@ -381,16 +381,12 @@ export class AppointmentService {
         scheduledAt: Date;
         endAt: Date;
     }) {
-        const availableSlots = await this.scheduleService.getAvailableSlots({
+        const isAvailable = await this.scheduleService.isSlotWithinSchedule({
             staffProfileId: input.staffProfileId,
             serviceId: input.serviceCatalogId,
-            date: toDateOnly(input.scheduledAt),
+            scheduledAt: input.scheduledAt,
+            endAt: input.endAt,
         });
-        const startIso = input.scheduledAt.toISOString();
-        const endIso = input.endAt.toISOString();
-        const isAvailable = availableSlots.slots.some(
-            (slot) => slot.start === startIso && slot.end === endIso,
-        );
 
         if (!isAvailable) {
             throw new AppError('Appointment slot is not available', 409);
@@ -406,7 +402,7 @@ export class AppointmentService {
         const conflicts = await this.appointmentRepository.countConflictingAppointments(input);
 
         if (conflicts > 0) {
-            throw new AppError('Appointment slot is already booked', 409);
+            throw new AppError('This appointment slot is already booked.', 409);
         }
     }
 

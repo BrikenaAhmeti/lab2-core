@@ -1,4 +1,4 @@
-import { Prisma } from '../../../generated/prisma';
+import { AppointmentStatus, Prisma } from '../../../generated/prisma';
 import { prisma } from '../../../infrastructure/db/prisma';
 import { AppError } from '../../../shared/core/errors/app-error';
 import {
@@ -246,7 +246,7 @@ export class SchedulePrismaRepository implements ScheduleRepository {
                     gt: filters.start,
                 },
                 status: {
-                    notIn: ['CANCELLED', 'NO_SHOW'],
+                    in: [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED],
                 },
             },
             select: {

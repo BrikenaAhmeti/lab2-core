@@ -472,6 +472,24 @@ function mockAppointmentAvailability() {
             updatedAt: createdAt,
         },
     ]);
+    jest.spyOn(SchedulePrismaRepository.prototype, 'listWeeklySchedules').mockResolvedValue([
+        {
+            id: 'schedule-1',
+            staffProfileId,
+            departmentId,
+            dayOfWeek: scheduledAt.getUTCDay(),
+            startTime: '09:00',
+            endTime: '10:00',
+            slotDurationMinutes: 30,
+            breakStart: null,
+            breakEnd: null,
+            validFrom: null,
+            validTo: null,
+            isActive: true,
+            createdAt,
+            updatedAt: createdAt,
+        },
+    ]);
     jest.spyOn(SchedulePrismaRepository.prototype, 'listExceptionsForDate').mockResolvedValue([]);
     jest.spyOn(SchedulePrismaRepository.prototype, 'listBookedAppointments').mockResolvedValue([]);
 }
@@ -599,7 +617,7 @@ describe('MS-47 critical integration flows', () => {
             });
 
         expect(conflictResponse.status).toBe(409);
-        expect(conflictResponse.body.message).toBe('Appointment slot is already booked');
+        expect(conflictResponse.body.message).toBe('This appointment slot is already booked.');
 
         const checkInResponse = await request(app)
             .patch(`/api/appointments/${appointmentId}/status`)

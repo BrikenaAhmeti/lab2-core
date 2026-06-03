@@ -124,6 +124,7 @@ function createService() {
     const lockRepository = createLockRepositoryMock();
     const scheduleService = {
         getAvailableSlots: jest.fn(),
+        isSlotWithinSchedule: jest.fn(),
     } as unknown as jest.Mocked<ScheduleService>;
     const eventPublisher: jest.Mocked<AppointmentEventPublisher> = {
         publish: jest.fn(),
@@ -178,6 +179,7 @@ function createService() {
             },
         ],
     });
+    scheduleService.isSlotWithinSchedule.mockResolvedValue(true);
 
     return {
         service,
@@ -269,7 +271,7 @@ describe('AppointmentService', () => {
                 scheduledAt,
             }),
         ).rejects.toMatchObject({
-            message: 'Appointment slot is already booked',
+            message: 'This appointment slot is already booked.',
             statusCode: 409,
         });
 

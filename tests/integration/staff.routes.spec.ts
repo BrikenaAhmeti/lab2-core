@@ -241,6 +241,8 @@ describe('Staff routes', () => {
         });
         jest.spyOn(SchedulePrismaRepository.prototype, 'listSchedulesForDay')
             .mockResolvedValue([schedule]);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listWeeklySchedules')
+            .mockResolvedValue([schedule]);
         jest.spyOn(SchedulePrismaRepository.prototype, 'listExceptionsForDate')
             .mockResolvedValue([]);
         jest.spyOn(SchedulePrismaRepository.prototype, 'listBookedAppointments')
@@ -279,6 +281,8 @@ describe('Staff routes', () => {
         });
         jest.spyOn(SchedulePrismaRepository.prototype, 'listSchedulesForDay')
             .mockResolvedValue([]);
+        jest.spyOn(SchedulePrismaRepository.prototype, 'listWeeklySchedules')
+            .mockResolvedValue([schedule]);
         jest.spyOn(SchedulePrismaRepository.prototype, 'listExceptionsForDate')
             .mockResolvedValue([]);
 

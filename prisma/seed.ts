@@ -131,6 +131,7 @@ const LEGACY_INVALID_UUIDS = {
 const ACTOR_USER_ID = DEMO_USER_IDS.admin;
 const DEMO_PASSWORD = 'Medsphere@123';
 const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_APPOINTMENT_DURATION_MINUTES = 30;
 
 const PERMISSIONS = [
     'departments:read',
@@ -710,7 +711,7 @@ async function upsertService(
     departmentId: string,
     name: string,
     description: string,
-    defaultDurationMinutes: number,
+    _defaultDurationMinutes: number,
     defaultPrice: string,
     sortOrder: number,
 ) {
@@ -723,7 +724,7 @@ async function upsertService(
         },
         update: {
             description,
-            defaultDurationMinutes,
+            defaultDurationMinutes: DEFAULT_APPOINTMENT_DURATION_MINUTES,
             defaultPrice,
             isActive: true,
             sortOrder,
@@ -733,7 +734,7 @@ async function upsertService(
             departmentId,
             name,
             description,
-            defaultDurationMinutes,
+            defaultDurationMinutes: DEFAULT_APPOINTMENT_DURATION_MINUTES,
             defaultPrice,
             isActive: true,
             sortOrder,
@@ -1299,16 +1300,23 @@ async function upsertAppointment(input: {
     cancelledAt?: Date | null;
     cancellationNote?: string | null;
 }) {
+    const appointmentTiming = {
+        endAt: addMinutes(input.scheduledAt, DEFAULT_APPOINTMENT_DURATION_MINUTES),
+        durationMinutes: DEFAULT_APPOINTMENT_DURATION_MINUTES,
+    };
+
     return prisma.appointment.upsert({
         where: { id: input.id },
         update: {
             ...input,
+            ...appointmentTiming,
             cancelledAt: input.cancelledAt ?? null,
             cancellationNote: input.cancellationNote ?? null,
             updatedBy: ACTOR_USER_ID,
         },
         create: {
             ...input,
+            ...appointmentTiming,
             createdBy: ACTOR_USER_ID,
             updatedBy: ACTOR_USER_ID,
         },
@@ -2256,7 +2264,7 @@ async function seedExpandedDemoData(
         ophthalmology.id,
         'Comprehensive Eye Exam',
         'Vision, pressure, and eye-health screening',
-        35,
+        30,
         '100.00',
         1,
     );
@@ -2264,7 +2272,7 @@ async function seedExpandedDemoData(
         ophthalmology.id,
         'Retinal Screening',
         'Retinal imaging and diabetic eye screening workflow',
-        25,
+        30,
         '115.00',
         2,
     );

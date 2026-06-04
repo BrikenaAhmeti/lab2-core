@@ -238,7 +238,7 @@ export class ScheduleService {
             slots: generateAvailableSlots({
                 date: params.date,
                 windows: availabilityWindows,
-                serviceDurationMinutes: service.defaultDurationMinutes,
+                serviceDurationMinutes: DEFAULT_SCHEDULE_SLOT_DURATION_MINUTES,
                 unavailableExceptions: exceptions,
                 bookedAppointments,
                 lockedSlots,
@@ -505,7 +505,7 @@ export class ScheduleService {
         return generateAvailableSlots({
             date: params.date,
             windows: availabilityWindows,
-            serviceDurationMinutes: service.defaultDurationMinutes,
+            serviceDurationMinutes: DEFAULT_SCHEDULE_SLOT_DURATION_MINUTES,
             unavailableExceptions: exceptions,
             bookedAppointments: [],
             lockedSlots: [],

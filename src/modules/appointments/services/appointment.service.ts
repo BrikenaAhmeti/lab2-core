@@ -15,6 +15,7 @@ import {
 import { AppointmentSlotLockRepository } from '../domain/appointment-slot-lock.repository';
 
 const SLOT_LOCK_TTL_SECONDS = 300;
+const APPOINTMENT_DURATION_MINUTES = 30;
 
 const VALID_STATUS_TRANSITIONS: Record<AppointmentStatus, AppointmentStatus[]> = {
     [AppointmentStatus.SCHEDULED]: [
@@ -101,7 +102,7 @@ export class AppointmentService {
         const service = await this.getActiveService(data.serviceCatalogId);
         await this.ensureStaffCanServeDepartment(data.staffProfileId, service.departmentId);
 
-        const range = this.buildAppointmentRange(data.scheduledAt, service.defaultDurationMinutes);
+        const range = this.buildAppointmentRange(data.scheduledAt);
         await this.ensureSlotIsAvailable({
             staffProfileId: data.staffProfileId,
             serviceCatalogId: data.serviceCatalogId,
@@ -138,7 +139,7 @@ export class AppointmentService {
                 appointmentType: data.appointmentType ?? AppointmentType.IN_PERSON,
                 scheduledAt: range.scheduledAt,
                 endAt: range.endAt,
-                durationMinutes: service.defaultDurationMinutes,
+                durationMinutes: APPOINTMENT_DURATION_MINUTES,
                 basePrice: service.defaultPrice,
                 notes: normalizeNotes(data.notes),
                 actorUserId: data.actorUserId,
@@ -216,7 +217,7 @@ export class AppointmentService {
         const service = await this.getActiveService(serviceId);
         await this.ensureStaffCanServeDepartment(staffProfileId, service.departmentId);
 
-        const range = this.buildAppointmentRange(data.scheduledAt, service.defaultDurationMinutes);
+        const range = this.buildAppointmentRange(data.scheduledAt);
         await this.ensureSlotIsAvailable({
             staffProfileId,
             serviceCatalogId: service.id,
@@ -252,7 +253,7 @@ export class AppointmentService {
                 staffProfileId,
                 scheduledAt: range.scheduledAt,
                 endAt: range.endAt,
-                durationMinutes: service.defaultDurationMinutes,
+                durationMinutes: APPOINTMENT_DURATION_MINUTES,
                 basePrice: service.defaultPrice,
                 appointmentType: data.appointmentType,
                 notes: normalizeNotes(data.notes),
@@ -339,10 +340,10 @@ export class AppointmentService {
         return updatedAppointment;
     }
 
-    private buildAppointmentRange(scheduledAt: Date, durationMinutes: number): AppointmentTimeRange {
+    private buildAppointmentRange(scheduledAt: Date): AppointmentTimeRange {
         return {
             scheduledAt,
-            endAt: addMinutes(scheduledAt, durationMinutes),
+            endAt: addMinutes(scheduledAt, APPOINTMENT_DURATION_MINUTES),
         };
     }
 

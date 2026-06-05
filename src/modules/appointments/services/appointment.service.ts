@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { AppointmentStatus, AppointmentType } from '../../../generated/prisma';
 import { AppError } from '../../../shared/core/errors/app-error';
 import { ScheduleService } from '../../schedules/services/schedule.service';
+import { isFutureScheduleClockDate } from '../../schedules/domain/schedule-time';
 import {
     AppointmentTimeRange,
     AppointmentView,
@@ -89,7 +90,7 @@ export class AppointmentService {
         notes?: string | null;
         actorUserId?: string;
     }): Promise<AppointmentView> {
-        if (data.scheduledAt <= this.nowProvider()) {
+        if (!isFutureScheduleClockDate(data.scheduledAt, this.nowProvider())) {
             throw new AppError('Cannot book an appointment in the past', 400);
         }
 
@@ -124,6 +125,8 @@ export class AppointmentService {
             throw new AppError('Appointment slot is currently locked', 409);
         }
 
+        let appointmentCreated = false;
+
         try {
             await this.ensureNoAppointmentConflict({
                 staffProfileId: data.staffProfileId,
@@ -144,7 +147,14 @@ export class AppointmentService {
                 notes: normalizeNotes(data.notes),
                 actorUserId: data.actorUserId,
             });
+            appointmentCreated = true;
 
+            await this.auditLogger.recordBooking({
+                appointmentId: appointment.id,
+                actorUserId: data.actorUserId,
+                scheduledAt: appointment.scheduledAt,
+                endAt: appointment.endAt,
+            });
             await this.publishSafely('AppointmentBooked', {
                 appointment,
                 actorUserId: data.actorUserId,
@@ -152,7 +162,13 @@ export class AppointmentService {
 
             return appointment;
         } finally {
-            await this.releaseSlotLockSafely(data.staffProfileId, range.scheduledAt, lockToken);
+            if (!appointmentCreated) {
+                await this.releaseSlotLockSafely(
+                    data.staffProfileId,
+                    range.scheduledAt,
+                    lockToken,
+                );
+            }
         }
     }
 
@@ -203,7 +219,7 @@ export class AppointmentService {
             throw new AppError('Finalized appointments cannot be rescheduled', 422);
         }
 
-        if (data.scheduledAt <= this.nowProvider()) {
+        if (!isFutureScheduleClockDate(data.scheduledAt, this.nowProvider())) {
             throw new AppError('Cannot reschedule an appointment in the past', 400);
         }
 

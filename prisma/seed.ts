@@ -420,8 +420,40 @@ function addUtcDays(date: Date, days: number) {
     return new Date(date.getTime() + days * DAY_MS);
 }
 
+function isClinicWeekday(date: Date) {
+    const day = date.getUTCDay();
+
+    return day >= 1 && day <= 5;
+}
+
+function nearestClinicWeekday(date: Date, direction: 1 | -1) {
+    let value = new Date(date);
+
+    while (!isClinicWeekday(value)) {
+        value = addUtcDays(value, direction);
+    }
+
+    return value;
+}
+
+function addClinicWeekdays(date: Date, offset: number) {
+    let value = nearestClinicWeekday(date, offset < 0 ? -1 : 1);
+    let remaining = Math.abs(offset);
+    const direction = offset < 0 ? -1 : 1;
+
+    while (remaining > 0) {
+        value = addUtcDays(value, direction);
+
+        if (isClinicWeekday(value)) {
+            remaining -= 1;
+        }
+    }
+
+    return value;
+}
+
 function utcAt(dayOffset: number, hour: number, minute = 0) {
-    const day = addUtcDays(startOfUtcDay(), dayOffset);
+    const day = addClinicWeekdays(startOfUtcDay(), dayOffset);
     day.setUTCHours(hour, minute, 0, 0);
 
     return day;
@@ -1187,11 +1219,11 @@ async function seedAppointments(
     departmentsAndServices: Awaited<ReturnType<typeof seedDepartmentsAndServices>>,
 ) {
     const { departments, services } = departmentsAndServices;
-    const checkedInStart = utcAt(0, 9, 0);
-    const confirmedStart = utcAt(0, 10, 30);
-    const completedStart = utcAt(0, 11, 30);
-    const tomorrowStart = utcAt(1, 9, 30);
-    const pastStart = utcAt(-1, 14, 0);
+    const checkedInStart = utcAt(1, 9, 0);
+    const confirmedStart = utcAt(1, 10, 30);
+    const completedStart = utcAt(-1, 11, 30);
+    const tomorrowStart = utcAt(2, 9, 30);
+    const pastStart = utcAt(-2, 14, 0);
 
     const checkedIn = await upsertAppointment({
         id: FIXTURE_IDS.appointmentCheckedIn,
@@ -1313,6 +1345,165 @@ async function upsertAppointment(input: {
             updatedBy: ACTOR_USER_ID,
         },
     });
+}
+
+const ACTIVE_SEED_APPOINTMENT_STATUSES = new Set<AppointmentStatus>([
+    AppointmentStatus.SCHEDULED,
+    AppointmentStatus.CONFIRMED,
+    AppointmentStatus.CHECKED_IN,
+    AppointmentStatus.IN_PROGRESS,
+]);
+
+const SCHEDULED_SEED_APPOINTMENT_STATUSES = new Set<AppointmentStatus>([
+    AppointmentStatus.SCHEDULED,
+    AppointmentStatus.CONFIRMED,
+    AppointmentStatus.CHECKED_IN,
+    AppointmentStatus.IN_PROGRESS,
+    AppointmentStatus.COMPLETED,
+]);
+
+function minutesFromUtcClock(value: Date) {
+    return value.getUTCHours() * 60 + value.getUTCMinutes();
+}
+
+function rangesOverlap(
+    start: Date,
+    end: Date,
+    blockedStart: Date,
+    blockedEnd: Date,
+) {
+    return start < blockedEnd && end > blockedStart;
+}
+
+function timeRangesOverlap(
+    start: number,
+    end: number,
+    blockedStart: number,
+    blockedEnd: number,
+) {
+    return start < blockedEnd && end > blockedStart;
+}
+
+function parseScheduleTime(value: string) {
+    const [hours, minutes] = value.split(':').map(Number);
+
+    return hours * 60 + minutes;
+}
+
+async function assertSeedAppointmentIntegrity() {
+    const issues: string[] = [];
+    const now = new Date();
+    const appointments = await prisma.appointment.findMany({
+        include: {
+            patient: { select: { firstName: true, lastName: true } },
+            serviceCatalog: { select: { name: true, departmentId: true } },
+            staffProfile: { select: { employeeCode: true } },
+        },
+        orderBy: [{ staffProfileId: 'asc' }, { scheduledAt: 'asc' }],
+    });
+    const schedules = await prisma.staffSchedule.findMany({
+        where: { isActive: true },
+    });
+    const byStaff = new Map<string, typeof appointments>();
+
+    for (const appointment of appointments) {
+        const label = `${appointment.id} (${appointment.serviceCatalog.name}, ${appointment.scheduledAt.toISOString()})`;
+
+        if (appointment.endAt <= appointment.scheduledAt) {
+            issues.push(`${label} ends before it starts.`);
+        }
+
+        if (appointment.departmentId !== appointment.serviceCatalog.departmentId) {
+            issues.push(`${label} department does not match its service catalog department.`);
+        }
+
+        if (
+            ACTIVE_SEED_APPOINTMENT_STATUSES.has(appointment.status) &&
+            appointment.scheduledAt <= now
+        ) {
+            issues.push(`${label} is an active seeded appointment in the past.`);
+        }
+
+        if (
+            appointment.staffProfileId &&
+            SCHEDULED_SEED_APPOINTMENT_STATUSES.has(appointment.status)
+        ) {
+            const day = startOfUtcDay(appointment.scheduledAt);
+            const schedule = schedules.find((candidate) =>
+                candidate.staffProfileId === appointment.staffProfileId &&
+                candidate.departmentId === appointment.departmentId &&
+                candidate.dayOfWeek === appointment.scheduledAt.getUTCDay() &&
+                (!candidate.validFrom || candidate.validFrom <= day) &&
+                (!candidate.validTo || candidate.validTo >= day),
+            );
+
+            if (!schedule) {
+                issues.push(`${label} has no active staff schedule for that department/day.`);
+            } else {
+                const startMinutes = minutesFromUtcClock(appointment.scheduledAt);
+                const endMinutes = minutesFromUtcClock(appointment.endAt);
+                const scheduleStart = parseScheduleTime(schedule.startTime);
+                const scheduleEnd = parseScheduleTime(schedule.endTime);
+
+                if (startMinutes < scheduleStart || endMinutes > scheduleEnd) {
+                    issues.push(`${label} is outside staff working hours.`);
+                }
+
+                if (schedule.breakStart && schedule.breakEnd) {
+                    const breakStart = parseScheduleTime(schedule.breakStart);
+                    const breakEnd = parseScheduleTime(schedule.breakEnd);
+
+                    if (timeRangesOverlap(startMinutes, endMinutes, breakStart, breakEnd)) {
+                        issues.push(`${label} overlaps a staff break.`);
+                    }
+                }
+            }
+        }
+
+        if (
+            appointment.staffProfileId &&
+            appointment.status !== AppointmentStatus.CANCELLED &&
+            appointment.status !== AppointmentStatus.NO_SHOW
+        ) {
+            const existing = byStaff.get(appointment.staffProfileId) ?? [];
+            existing.push(appointment);
+            byStaff.set(appointment.staffProfileId, existing);
+        }
+    }
+
+    for (const [staffProfileId, staffAppointments] of byStaff.entries()) {
+        const sorted = [...staffAppointments].sort(
+            (left, right) => left.scheduledAt.getTime() - right.scheduledAt.getTime(),
+        );
+
+        for (let index = 1; index < sorted.length; index += 1) {
+            const previous = sorted[index - 1];
+            const current = sorted[index];
+
+            if (
+                rangesOverlap(
+                    previous.scheduledAt,
+                    previous.endAt,
+                    current.scheduledAt,
+                    current.endAt,
+                )
+            ) {
+                issues.push(
+                    `Staff ${staffProfileId} has overlapping seeded appointments ${previous.id} and ${current.id}.`,
+                );
+            }
+        }
+    }
+
+    if (issues.length > 0) {
+        throw new Error(
+            `Seed appointment integrity check failed:\n${issues
+                .map((issue) => `- ${issue}`)
+                .join('\n')}`,
+        );
+    }
+
+    console.log(`Seed appointment integrity check passed for ${appointments.length} appointments.`);
 }
 
 async function seedClinicalData(
@@ -3702,8 +3893,8 @@ async function seedExpandedDemoData(
         staffProfileId: staff.doctor.id,
         status: AppointmentStatus.SCHEDULED,
         appointmentType: AppointmentType.VIRTUAL,
-        scheduledAt: utcAt(0, 13, 0),
-        endAt: utcAt(0, 13, 30),
+        scheduledAt: utcAt(1, 13, 0),
+        endAt: utcAt(1, 13, 30),
         durationMinutes: 30,
         basePrice: '85.00',
         notes: 'Virtual migraine follow-up scheduled.',
@@ -3718,12 +3909,12 @@ async function seedExpandedDemoData(
         staffProfileId: emergencyNurse.id,
         status: AppointmentStatus.IN_PROGRESS,
         appointmentType: AppointmentType.WALK_IN,
-        scheduledAt: utcAt(0, 15, 0),
-        endAt: utcAt(0, 15, 30),
+        scheduledAt: utcAt(1, 14, 0),
+        endAt: utcAt(1, 14, 30),
         durationMinutes: 30,
         basePrice: '120.00',
         notes: 'Walk-in dizziness and glucose review in progress.',
-        checkedInAt: utcAt(0, 14, 54),
+        checkedInAt: utcAt(1, 13, 54),
         completedAt: null,
     });
     const radiologyFuture = await upsertAppointment({
@@ -3731,11 +3922,11 @@ async function seedExpandedDemoData(
         patientId: extraPatients[5].id,
         departmentId: radiology.id,
         serviceCatalogId: xray.id,
-        staffProfileId: clinicAdmin.id,
+        staffProfileId: additionalStaff.get('radiologistAleksei')!.id,
         status: AppointmentStatus.CONFIRMED,
         appointmentType: AppointmentType.IN_PERSON,
-        scheduledAt: utcAt(1, 12, 0),
-        endAt: utcAt(1, 12, 25),
+        scheduledAt: utcAt(1, 12, 30),
+        endAt: utcAt(1, 12, 55),
         durationMinutes: 25,
         basePrice: '75.00',
         notes: 'Imaging appointment coordinated by administration.',
@@ -3750,12 +3941,12 @@ async function seedExpandedDemoData(
         staffProfileId: labTechnician.id,
         status: AppointmentStatus.CHECKED_IN,
         appointmentType: AppointmentType.IN_PERSON,
-        scheduledAt: utcAt(0, 8, 30),
-        endAt: utcAt(0, 8, 45),
+        scheduledAt: utcAt(1, 8, 30),
+        endAt: utcAt(1, 8, 45),
         durationMinutes: 15,
         basePrice: '25.00',
         notes: 'Patient checked in for lab-only sample collection.',
-        checkedInAt: utcAt(0, 8, 20),
+        checkedInAt: utcAt(1, 8, 20),
         completedAt: null,
     });
     const pharmacyCompleted = await upsertAppointment({
@@ -3845,7 +4036,7 @@ async function seedExpandedDemoData(
         patientId: extraPatients[0].id,
         departmentId: billingAdmin.id,
         serviceCatalogId: billingConsultation.id,
-        staffProfileId: staff.receptionist.id,
+        staffProfileId: clinicAdmin.id,
         status: AppointmentStatus.CONFIRMED,
         appointmentType: AppointmentType.IN_PERSON,
         scheduledAt: utcAt(4, 11, 30),
@@ -3901,7 +4092,7 @@ async function seedExpandedDemoData(
             staffProfileId: additionalStaff.get('orthopedistMateusz')!.id,
             status: AppointmentStatus.CHECKED_IN,
             appointmentType: AppointmentType.IN_PERSON,
-            scheduledAt: utcAt(0, 11, 0),
+            scheduledAt: utcAt(1, 11, 0),
             durationMinutes: 35,
             basePrice: '130.00',
             notes: 'Knee pain assessment; patient checked in.',
@@ -3925,7 +4116,7 @@ async function seedExpandedDemoData(
             staffProfileId: additionalStaff.get('pediatricianMateo')!.id,
             status: AppointmentStatus.COMPLETED,
             appointmentType: AppointmentType.IN_PERSON,
-            scheduledAt: utcAt(-2, 9, 30),
+            scheduledAt: utcAt(-2, 12, 30),
             durationMinutes: 30,
             basePrice: '95.00',
             notes: 'Pediatric rash review completed.',
@@ -3961,7 +4152,7 @@ async function seedExpandedDemoData(
             staffProfileId: additionalStaff.get('endocrinologistNoah')!.id,
             status: AppointmentStatus.IN_PROGRESS,
             appointmentType: AppointmentType.IN_PERSON,
-            scheduledAt: utcAt(0, 14, 0),
+            scheduledAt: utcAt(1, 14, 0),
             durationMinutes: 35,
             basePrice: '125.00',
             notes: 'Thyroid medication review currently in progress.',
@@ -4059,7 +4250,7 @@ async function seedExpandedDemoData(
             staffProfileId: additionalStaff.get('psychiatristRavi')!.id,
             status: AppointmentStatus.COMPLETED,
             appointmentType: AppointmentType.VIRTUAL,
-            scheduledAt: utcAt(-6, 17, 0),
+            scheduledAt: utcAt(-6, 16, 0),
             durationMinutes: 30,
             basePrice: '125.00',
             notes: 'Psychiatry follow-up completed.',
@@ -4083,7 +4274,7 @@ async function seedExpandedDemoData(
             staffProfileId: additionalStaff.get('therapistJonas')!.id,
             status: AppointmentStatus.CHECKED_IN,
             appointmentType: AppointmentType.IN_PERSON,
-            scheduledAt: utcAt(0, 16, 0),
+            scheduledAt: utcAt(1, 16, 0),
             durationMinutes: 30,
             basePrice: '75.00',
             notes: 'Rehabilitation follow-up checked in.',
@@ -4107,7 +4298,7 @@ async function seedExpandedDemoData(
             staffProfileId: additionalStaff.get('pediatricianMateo')!.id,
             status: AppointmentStatus.COMPLETED,
             appointmentType: AppointmentType.IN_PERSON,
-            scheduledAt: utcAt(-1, 10, 30),
+            scheduledAt: utcAt(-1, 13, 0),
             durationMinutes: 30,
             basePrice: '80.00',
             notes: 'Child wellness check completed.',
@@ -4131,7 +4322,7 @@ async function seedExpandedDemoData(
             staffProfileId: additionalStaff.get('cardiologistAmara')!.id,
             status: AppointmentStatus.COMPLETED,
             appointmentType: AppointmentType.IN_PERSON,
-            scheduledAt: utcAt(-4, 12, 0),
+            scheduledAt: utcAt(-4, 12, 30),
             durationMinutes: 20,
             basePrice: '65.00',
             notes: 'ECG completed for exertional symptom review.',
@@ -6152,6 +6343,7 @@ async function main() {
         appointments,
         clinicalData,
     );
+    await assertSeedAppointmentIntegrity();
 
     console.log('Core service seed complete.');
     console.log(`Shared auth demo password: ${DEMO_PASSWORD}`);

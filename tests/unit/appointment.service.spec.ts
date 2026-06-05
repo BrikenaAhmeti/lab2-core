@@ -125,6 +125,7 @@ function createService() {
         publish: jest.fn(),
     };
     const auditLogger: jest.Mocked<AppointmentAuditLogger> = {
+        recordBooking: jest.fn(),
         recordReschedule: jest.fn(),
     };
     const service = new AppointmentService(
@@ -191,7 +192,7 @@ describe('AppointmentService', () => {
     });
 
     it('books an available appointment with a slot lock', async () => {
-        const { service, repository, lockRepository, eventPublisher } = createService();
+        const { service, repository, lockRepository, eventPublisher, auditLogger } = createService();
 
         const result = await service.bookAppointment({
             patientId,
@@ -221,12 +222,13 @@ describe('AppointmentService', () => {
                 ttlSeconds: 300,
             }),
         );
-        expect(lockRepository.releaseSlotLock).toHaveBeenCalledWith(
-            expect.objectContaining({
-                staffProfileId,
-                scheduledAt,
-            }),
-        );
+        expect(lockRepository.releaseSlotLock).not.toHaveBeenCalled();
+        expect(auditLogger.recordBooking).toHaveBeenCalledWith({
+            appointmentId,
+            actorUserId: undefined,
+            scheduledAt,
+            endAt,
+        });
         expect(eventPublisher.publish).toHaveBeenCalledWith('AppointmentBooked', {
             appointment,
             actorUserId: undefined,

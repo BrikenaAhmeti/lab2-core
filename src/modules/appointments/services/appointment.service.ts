@@ -125,8 +125,6 @@ export class AppointmentService {
             throw new AppError('Appointment slot is currently locked', 409);
         }
 
-        let appointmentCreated = false;
-
         try {
             await this.ensureNoAppointmentConflict({
                 staffProfileId: data.staffProfileId,
@@ -147,7 +145,6 @@ export class AppointmentService {
                 notes: normalizeNotes(data.notes),
                 actorUserId: data.actorUserId,
             });
-            appointmentCreated = true;
 
             await this.auditLogger.recordBooking({
                 appointmentId: appointment.id,
@@ -162,13 +159,11 @@ export class AppointmentService {
 
             return appointment;
         } finally {
-            if (!appointmentCreated) {
-                await this.releaseSlotLockSafely(
-                    data.staffProfileId,
-                    range.scheduledAt,
-                    lockToken,
-                );
-            }
+            await this.releaseSlotLockSafely(
+                data.staffProfileId,
+                range.scheduledAt,
+                lockToken,
+            );
         }
     }
 

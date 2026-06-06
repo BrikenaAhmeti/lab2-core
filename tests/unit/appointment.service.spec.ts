@@ -222,7 +222,13 @@ describe('AppointmentService', () => {
                 ttlSeconds: 300,
             }),
         );
-        expect(lockRepository.releaseSlotLock).not.toHaveBeenCalled();
+        expect(lockRepository.releaseSlotLock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                staffProfileId,
+                scheduledAt,
+                token: expect.any(String),
+            }),
+        );
         expect(auditLogger.recordBooking).toHaveBeenCalledWith({
             appointmentId,
             actorUserId: undefined,

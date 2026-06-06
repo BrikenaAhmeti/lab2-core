@@ -50,6 +50,7 @@ const FIXTURE_IDS = {
     appointmentCompletedToday: '20000000-0000-4000-8000-000000000003',
     appointmentTomorrow: '20000000-0000-4000-8000-000000000004',
     appointmentCompletedPast: '20000000-0000-4000-8000-000000000005',
+    appointmentDoctorUpcoming: '20000000-0000-4000-8000-000000000006',
     medicalRecordPatient: '30000000-0000-4000-8000-000000000001',
     medicalRecordJohn: '30000000-0000-4000-8000-000000000002',
     prescriptionPatient: '40000000-0000-4000-8000-000000000001',
@@ -1224,6 +1225,7 @@ async function seedAppointments(
     const completedStart = utcAt(-1, 11, 30);
     const tomorrowStart = utcAt(2, 9, 30);
     const pastStart = utcAt(-2, 14, 0);
+    const doctorUpcomingStart = utcAt(1, 15, 0);
 
     const checkedIn = await upsertAppointment({
         id: FIXTURE_IDS.appointmentCheckedIn,
@@ -1310,7 +1312,24 @@ async function seedAppointments(
         completedAt: addMinutes(pastStart, 28),
     });
 
-    return { checkedIn, confirmed, completedToday, tomorrow, completedPast };
+    const doctorUpcoming = await upsertAppointment({
+        id: FIXTURE_IDS.appointmentDoctorUpcoming,
+        patientId: patients.maria.id,
+        departmentId: departments.primaryCare.id,
+        serviceCatalogId: services.generalConsultation.id,
+        staffProfileId: staff.doctor.id,
+        status: AppointmentStatus.CONFIRMED,
+        appointmentType: AppointmentType.IN_PERSON,
+        scheduledAt: doctorUpcomingStart,
+        endAt: addMinutes(doctorUpcomingStart, 30),
+        durationMinutes: 30,
+        basePrice: '85.00',
+        notes: 'Upcoming seeded appointment for the demo doctor login.',
+        checkedInAt: null,
+        completedAt: null,
+    });
+
+    return { checkedIn, confirmed, completedToday, tomorrow, completedPast, doctorUpcoming };
 }
 
 async function upsertAppointment(input: {

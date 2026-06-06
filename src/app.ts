@@ -6,6 +6,7 @@ import { env } from './config/env';
 import { errorHandler } from './shared/middleware/error-handler';
 import { notFoundHandler } from './shared/middleware/not-found';
 import { auditLogger } from './shared/middleware/audit-logger';
+import { createRateLimiter } from './shared/middleware/rate-limit';
 import { requestContext } from './shared/middleware/request-context';
 import { requestLogger } from './shared/middleware/request-logger';
 import {
@@ -62,7 +63,8 @@ function isLocalDevelopmentOrigin(origin: string) {
 
     try {
         const url = new URL(origin);
-        return ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+        return ['http:', 'https:'].includes(url.protocol) &&
+            ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
     } catch {
         return false;
     }
@@ -97,10 +99,6 @@ export function createApp() {
             origin: (origin, callback) => {
                 if (!origin) return callback(null, true);
 
-                if (allowedOrigins.length === 0 && env.nodeEnv !== 'production') {
-                    return callback(null, true);
-                }
-
                 if (allowedOrigins.includes(origin)) {
                     return callback(null, true);
                 }
@@ -109,10 +107,15 @@ export function createApp() {
                     return callback(null, true);
                 }
 
-                return callback(new Error('CORS policy: origin not allowed'));
+                return callback(null, false);
             },
         }),
     );
+    app.use(createRateLimiter({
+        windowMs: 15 * 60_000,
+        maxRequests: 600,
+        skip: (req) => req.method === 'OPTIONS' || req.path === '/health',
+    }));
     app.use(requestContext);
     app.use(requestLogger);
     app.use(express.json({ limit: '10mb' }));

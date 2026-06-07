@@ -6334,6 +6334,7 @@ async function seedMissingPatientPersonalNumbers() {
     });
 
     let sequence = 1;
+    let updatedCount = 0;
 
     for (const patient of patientsMissingPersonalNumber) {
         let personalNumber = '';
@@ -6360,6 +6361,11 @@ async function seedMissingPatientPersonalNumbers() {
                 updatedBy: ACTOR_USER_ID,
             },
         });
+        updatedCount += 1;
+    }
+
+    if (updatedCount > 0) {
+        console.log(`Backfilled personal numbers for ${updatedCount} existing patient profiles.`);
     }
 }
 

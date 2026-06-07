@@ -1,5 +1,6 @@
 import { Prisma } from '../../../generated/prisma';
 import { prisma } from '../../../infrastructure/db/prisma';
+import { decryptPersonalNumber } from '../../patients/domain/patient.crypto';
 import {
     AppointmentSearchItem,
     AuditLogSearchItem,
@@ -78,6 +79,7 @@ const auditLogDefaultOrder = Prisma.sql`al.created_at DESC, al.id ASC`;
 const patientSortColumns = {
     firstName: Prisma.sql`p.first_name`,
     lastName: Prisma.sql`p.last_name`,
+    personalNumber: Prisma.sql`p.personal_number_hash`,
     email: Prisma.sql`p.email`,
     dateOfBirth: Prisma.sql`p.date_of_birth`,
     age: Prisma.sql`CASE WHEN p.date_of_birth IS NULL THEN NULL ELSE EXTRACT(YEAR FROM age(CURRENT_DATE, p.date_of_birth))::int END`,
@@ -363,6 +365,7 @@ export class AdvancedSearchPrismaRepository implements AdvancedSearchRepository 
                     p.user_id AS "userId",
                     p.first_name AS "firstName",
                     p.last_name AS "lastName",
+                    p.personal_number AS "personalNumber",
                     p.email,
                     p.phone,
                     p.date_of_birth AS "dateOfBirth",
@@ -387,7 +390,15 @@ export class AdvancedSearchPrismaRepository implements AdvancedSearchRepository 
             `),
         ]);
 
-        return buildPagedResult(rows, totalFrom(countRows), filters.page, filters.limit);
+        return buildPagedResult(
+            rows.map((row) => ({
+                ...row,
+                personalNumber: decryptPersonalNumber(row.personalNumber),
+            })),
+            totalFrom(countRows),
+            filters.page,
+            filters.limit,
+        );
     }
 
     async searchAppointments(

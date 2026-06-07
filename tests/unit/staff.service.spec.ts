@@ -162,6 +162,38 @@ describe('StaffService', () => {
         });
     });
 
+    it('adds seeded staff email fallbacks when auth profiles are unavailable', async () => {
+        const repository = createRepositoryMock();
+        repository.list.mockResolvedValue({
+            items: [
+                {
+                    ...staffProfile,
+                    userId: 'b2000000-0000-4000-8000-000000000001',
+                    user: { id: 'b2000000-0000-4000-8000-000000000001' },
+                    employeeCode: 'Dr. Amina El-Sayed',
+                },
+            ],
+            meta: {
+                page: 1,
+                limit: 10,
+                total: 1,
+                totalPages: 1,
+            },
+        });
+        const service = new StaffService(repository);
+
+        const result = await service.listStaffProfiles({ page: 1, limit: 10 });
+
+        expect(result.items[0].user).toEqual(
+            expect.objectContaining({
+                name: 'Amina El-Sayed',
+                firstName: 'Amina',
+                lastName: 'El-Sayed',
+                email: 'amina.el-sayed@medsphere.local',
+            }),
+        );
+    });
+
     it('blocks deactivation when future appointments exist', async () => {
         const repository = createRepositoryMock();
         repository.findById.mockResolvedValue(staffProfile);

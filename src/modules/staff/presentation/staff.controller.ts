@@ -4,6 +4,7 @@ import { EmploymentStatus } from '../../../generated/prisma';
 import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
 import { HttpAuthAccountProvisioningClient } from '../../../shared/auth/auth-account-provisioning.client';
+import { HttpAuthUserProfilesClient } from '../../../shared/auth/auth-user-profiles.client';
 import { AddStaffDepartmentCommand } from '../application/commands/add-staff-department.command';
 import { CreateStaffProfileCommand } from '../application/commands/create-staff-profile.command';
 import { DeactivateStaffProfileCommand } from '../application/commands/deactivate-staff-profile.command';
@@ -154,6 +155,7 @@ export class StaffController {
     private readonly service = new StaffService(
         new StaffPrismaRepository(),
         new HttpAuthAccountProvisioningClient(),
+        new HttpAuthUserProfilesClient(),
     );
     private readonly createStaffProfileHandler = new CreateStaffProfileHandler(
         this.service,

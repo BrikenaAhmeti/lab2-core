@@ -60,6 +60,36 @@ describe('Data exchange routes', () => {
         expect(exportSpy).toHaveBeenCalledWith('patients');
     });
 
+    it('exports staff as CSV with staff permissions', async () => {
+        const exportSpy = jest
+            .spyOn(DataExchangePrismaRepository.prototype, 'exportRows')
+            .mockResolvedValue([
+                {
+                    id: '017d4e71-d8b9-40ef-96bd-45eaa3d54d33',
+                    userId: 'b2000000-0000-4000-8000-000000000001',
+                    firstName: 'Amina',
+                    lastName: 'El-Sayed',
+                    email: 'amina.el-sayed@medsphere.local',
+                    positionType: 'Doctor',
+                    departmentNames: 'Cardiology',
+                    primaryDepartment: 'Cardiology',
+                },
+            ]);
+
+        const response = await request(app)
+            .get('/api/export/staff?format=csv')
+            .set('Authorization', `Bearer ${createAccessToken(['staff:read'])}`);
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toContain('text/csv');
+        expect(response.headers['content-disposition']).toContain('staff-');
+        expect(response.text).toContain('email');
+        expect(response.text).toContain('departmentNames');
+        expect(response.text).toContain('amina.el-sayed@medsphere.local');
+        expect(response.text).toContain('Cardiology');
+        expect(exportSpy).toHaveBeenCalledWith('staff');
+    });
+
     it('imports patients from a multipart CSV in lenient mode', async () => {
         jest.spyOn(
             DataExchangePrismaRepository.prototype,

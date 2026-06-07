@@ -24,6 +24,16 @@ export interface StaffDepartmentAssignmentView {
 
 export interface StaffUserSummary {
     id: string;
+    userId?: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    name?: string | null;
+    email?: string | null;
+    username?: string | null;
+    phone?: string | null;
+    avatarFileId?: string | null;
+    roles?: string[];
+    role?: string;
 }
 
 export interface StaffProfileEntity {

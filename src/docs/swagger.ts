@@ -264,6 +264,7 @@ const exportEntities = [
     'inventory-items',
     'billings',
     'audit-logs',
+    'staff',
 ];
 const importEntities = [
     'patients',

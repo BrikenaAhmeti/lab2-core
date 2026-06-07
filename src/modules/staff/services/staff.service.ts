@@ -1,17 +1,21 @@
 import { EmploymentStatus } from '../../../generated/prisma';
 import type { AuthAccountProvisioningClient } from '../../../shared/auth/auth-account-provisioning.client';
+import type { AuthUserProfilesClient } from '../../../shared/auth/auth-user-profiles.client';
 import { AppError } from '../../../shared/core/errors/app-error';
+import type { StaffProfileListResult, StaffProfileView } from '../domain/staff.entity';
 import { normalizeEmployeeCode, normalizeOptionalText, normalizeSearch } from '../domain/staff.normalizer';
 import {
     StaffDepartmentAssignmentData,
     StaffRepository,
     UpdateStaffProfileData,
 } from '../domain/staff.repository';
+import { deriveStaffUserFallback } from '../domain/staff-user-fallback';
 
 export class StaffService {
     constructor(
         private readonly staffRepository: StaffRepository,
         private readonly authAccountProvisioningClient?: AuthAccountProvisioningClient,
+        private readonly authUserProfilesClient?: AuthUserProfilesClient,
     ) { }
 
     async createStaffProfile(data: {
@@ -64,7 +68,7 @@ export class StaffService {
 
         const userId = data.userId ?? (await this.provisionStaffAccount(data, positionType));
 
-        return this.staffRepository.createWithDepartments({
+        const staffProfile = await this.staffRepository.createWithDepartments({
             userId,
             staffPositionTypeId: data.staffPositionTypeId,
             employeeCode,
@@ -77,6 +81,61 @@ export class StaffService {
             departments,
             actorUserId: data.actorUserId,
         });
+
+        return this.enrichStaffProfile(staffProfile);
+    }
+
+    private async enrichStaffProfile<T extends StaffProfileView>(staffProfile: T): Promise<T> {
+        const [enrichedStaffProfile] = await this.enrichStaffProfiles([staffProfile]);
+
+        return enrichedStaffProfile ?? staffProfile;
+    }
+
+    private async enrichStaffProfiles<T extends StaffProfileView>(staffProfiles: T[]): Promise<T[]> {
+        if (staffProfiles.length === 0) {
+            return staffProfiles;
+        }
+
+        const authProfiles = this.authUserProfilesClient
+            ? await this.authUserProfilesClient.getProfiles(
+                staffProfiles.map((staffProfile) => staffProfile.userId),
+            )
+            : [];
+        const authProfilesByUserId = new Map(
+            authProfiles.map((profile) => [profile.userId || profile.id, profile]),
+        );
+
+        return staffProfiles.map((staffProfile) => {
+            const authProfile = authProfilesByUserId.get(staffProfile.userId);
+            const fallbackUser = deriveStaffUserFallback(staffProfile);
+
+            const name = [authProfile?.firstName, authProfile?.lastName]
+                .filter(Boolean)
+                .join(' ');
+
+            return {
+                ...staffProfile,
+                user: {
+                    ...fallbackUser,
+                    ...staffProfile.user,
+                    ...(authProfile ?? {}),
+                    id: authProfile?.id ?? staffProfile.user.id,
+                    userId: authProfile?.userId || authProfile?.id || staffProfile.userId,
+                    firstName: authProfile?.firstName ?? staffProfile.user.firstName ?? fallbackUser.firstName,
+                    lastName: authProfile?.lastName ?? staffProfile.user.lastName ?? fallbackUser.lastName,
+                    name: name || authProfile?.email || staffProfile.user.name || fallbackUser.name,
+                    email: authProfile?.email ?? staffProfile.user.email ?? fallbackUser.email,
+                    phone: authProfile?.phone ?? staffProfile.user.phone ?? fallbackUser.phone,
+                },
+            };
+        });
+    }
+
+    private async enrichStaffList(result: StaffProfileListResult): Promise<StaffProfileListResult> {
+        return {
+            ...result,
+            items: await this.enrichStaffProfiles(result.items),
+        };
     }
 
     private async provisionStaffAccount(
@@ -142,7 +201,7 @@ export class StaffService {
             throw new AppError('Staff profile not found', 404);
         }
 
-        return staffProfile;
+        return this.enrichStaffProfile(staffProfile);
     }
 
     async listStaffProfiles(filters: {
@@ -153,14 +212,14 @@ export class StaffService {
         status?: EmploymentStatus;
         search?: string;
     }) {
-        return this.staffRepository.list({
+        return this.enrichStaffList(await this.staffRepository.list({
             page: filters.page,
             limit: filters.limit,
             departmentId: filters.departmentId,
             positionTypeId: filters.positionTypeId,
             status: filters.status,
             search: normalizeSearch(filters.search),
-        });
+        }));
     }
 
     async listPublicStaffProfiles(filters: {
@@ -170,7 +229,7 @@ export class StaffService {
         positionTypeId?: string;
         search?: string;
     }) {
-        return this.staffRepository.list({
+        return this.enrichStaffList(await this.staffRepository.list({
             page: filters.page,
             limit: filters.limit,
             departmentId: filters.departmentId,
@@ -178,7 +237,7 @@ export class StaffService {
             status: 'ACTIVE',
             search: normalizeSearch(filters.search),
             publicOnly: true,
-        });
+        }));
     }
 
     async listDepartmentStaff(filters: {
@@ -196,13 +255,13 @@ export class StaffService {
             throw new AppError('Department not found', 404);
         }
 
-        return this.staffRepository.list({
+        return this.enrichStaffList(await this.staffRepository.list({
             page: filters.page,
             limit: filters.limit,
             departmentId: filters.departmentId,
             status: filters.status,
             search: normalizeSearch(filters.search),
-        });
+        }));
     }
 
     async updateStaffProfile(id: string, data: UpdateStaffProfileData) {
@@ -271,7 +330,7 @@ export class StaffService {
             throw new AppError('At least one field is required', 400);
         }
 
-        return this.staffRepository.update(id, updateData);
+        return this.enrichStaffProfile(await this.staffRepository.update(id, updateData));
     }
 
     async deactivateStaffProfile(id: string, actorUserId?: string) {
@@ -282,7 +341,7 @@ export class StaffService {
         }
 
         if (existingStaffProfile.employmentStatus === 'INACTIVE') {
-            return existingStaffProfile;
+            return this.enrichStaffProfile(existingStaffProfile);
         }
 
         const futureAppointments = await this.staffRepository.countFutureAppointments(
@@ -297,7 +356,7 @@ export class StaffService {
             );
         }
 
-        return this.staffRepository.deactivate(id, actorUserId);
+        return this.enrichStaffProfile(await this.staffRepository.deactivate(id, actorUserId));
     }
 
     async addDepartment(
@@ -307,7 +366,7 @@ export class StaffService {
         await this.getStaffProfileById(id);
         await this.ensureDepartmentsExist([data.departmentId]);
 
-        return this.staffRepository.addDepartment(id, data);
+        return this.enrichStaffProfile(await this.staffRepository.addDepartment(id, data));
     }
 
     async removeDepartment(
@@ -329,7 +388,7 @@ export class StaffService {
             throw new AppError('Staff profile must have at least one department', 409);
         }
 
-        return this.staffRepository.removeDepartment(id, departmentId, actorUserId);
+        return this.enrichStaffProfile(await this.staffRepository.removeDepartment(id, departmentId, actorUserId));
     }
 
     private normalizeDepartmentAssignments(

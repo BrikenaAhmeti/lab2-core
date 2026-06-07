@@ -1,6 +1,8 @@
 import { BloodType, EmploymentStatus, Prisma } from '../../../generated/prisma';
 import { prisma } from '../../../infrastructure/db/prisma';
+import { HttpAuthUserProfilesClient } from '../../../shared/auth/auth-user-profiles.client';
 import { decryptPersonalNumber } from '../../patients/domain/patient.crypto';
+import { deriveStaffUserFallback } from '../../staff/domain/staff-user-fallback';
 import {
     DataExchangeRow,
     DepartmentReference,
@@ -58,6 +60,8 @@ function toJsonInput(value: unknown) {
 }
 
 export class DataExchangePrismaRepository implements DataExchangeRepository {
+    private readonly authUserProfilesClient = new HttpAuthUserProfilesClient();
+
     async exportRows(entity: ExportEntity): Promise<DataExchangeRow[]> {
         if (entity === 'patients') {
             return this.exportPatients();
@@ -77,6 +81,10 @@ export class DataExchangePrismaRepository implements DataExchangeRepository {
 
         if (entity === 'billings') {
             return this.exportBillings();
+        }
+
+        if (entity === 'staff') {
+            return this.exportStaff();
         }
 
         return this.exportAuditLogs();
@@ -590,6 +598,65 @@ export class DataExchangePrismaRepository implements DataExchangeRepository {
             issuedAt: billing.issuedAt,
             paidAt: billing.paidAt,
         }));
+    }
+
+    private async exportStaff(): Promise<DataExchangeRow[]> {
+        const staffProfiles = await prisma.staffProfile.findMany({
+            orderBy: [{ employeeCode: 'asc' }, { createdAt: 'desc' }],
+            include: {
+                staffPositionType: { select: { name: true } },
+                departmentAssignments: {
+                    where: { unassignedAt: null },
+                    orderBy: [{ isPrimary: 'desc' }, { assignedAt: 'asc' }],
+                    include: {
+                        department: { select: { id: true, name: true } },
+                    },
+                },
+            },
+        });
+        const authProfiles = await this.authUserProfilesClient.getProfiles(
+            staffProfiles.map((staffProfile) => staffProfile.userId),
+        );
+        const authProfilesByUserId = new Map(
+            authProfiles.map((profile) => [profile.userId || profile.id, profile]),
+        );
+
+        return staffProfiles.map((staffProfile) => {
+            const authProfile = authProfilesByUserId.get(staffProfile.userId);
+            const fallbackUser = deriveStaffUserFallback({
+                userId: staffProfile.userId,
+                employeeCode: staffProfile.employeeCode,
+            });
+            const activeAssignments = staffProfile.departmentAssignments;
+            const primaryDepartment =
+                activeAssignments.find((assignment) => assignment.isPrimary)?.department ??
+                activeAssignments[0]?.department;
+
+            return {
+                id: staffProfile.id,
+                userId: staffProfile.userId,
+                firstName: authProfile?.firstName ?? fallbackUser.firstName,
+                lastName: authProfile?.lastName ?? fallbackUser.lastName,
+                email: authProfile?.email ?? fallbackUser.email,
+                phone: authProfile?.phone ?? fallbackUser.phone,
+                employeeCode: staffProfile.employeeCode,
+                positionType: staffProfile.staffPositionType.name,
+                specialization: staffProfile.specialization,
+                licenseNumber: staffProfile.licenseNumber,
+                employmentStatus: staffProfile.employmentStatus,
+                hireDate: staffProfile.hireDate,
+                isPublicProfile: staffProfile.isPublicProfile,
+                departmentIds: activeAssignments
+                    .map((assignment) => assignment.departmentId)
+                    .join(', '),
+                departmentNames: activeAssignments
+                    .map((assignment) => assignment.department.name)
+                    .join(', '),
+                primaryDepartment: primaryDepartment?.name ?? null,
+                createdAt: staffProfile.createdAt,
+                updatedAt: staffProfile.updatedAt,
+            };
+        });
     }
 
     private async exportAuditLogs(): Promise<DataExchangeRow[]> {

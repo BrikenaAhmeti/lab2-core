@@ -108,6 +108,7 @@ const listBillingsQuerySchema = z.object({
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(10),
     patientId: z.string().uuid('Invalid patient id').optional(),
+    search: z.string().trim().max(120).optional(),
     status: z.enum(billingStatusValues).optional(),
     from: optionalDateTimeSchema,
     to: optionalDateTimeSchema,
@@ -159,6 +160,7 @@ export class BillingController {
                 query.page,
                 query.limit,
                 query.patientId,
+                query.search,
                 query.status as BillingStatus | undefined,
                 query.from,
                 query.to,
@@ -225,7 +227,7 @@ export class BillingController {
 
     async downloadPdf(req: Request, res: Response) {
         const params = idParamsSchema.parse(req.params);
-        const pdf = await this.queryBus.execute(
+        const document = await this.queryBus.execute(
             this.getBillingPdfHandler,
             new GetBillingPdfQuery(
                 params.id,
@@ -237,9 +239,9 @@ export class BillingController {
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader(
             'Content-Disposition',
-            `attachment; filename="billing-${params.id}.pdf"`,
+            `attachment; filename="${document.filename}"`,
         );
 
-        return res.status(200).send(pdf);
+        return res.status(200).send(document.pdf);
     }
 }

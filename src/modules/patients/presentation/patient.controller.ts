@@ -51,7 +51,14 @@ const createPatientSchema = z.object({
     dateOfBirth: z.coerce.date().nullable().optional(),
     gender: z.union([z.string().trim().max(40), z.null()]).optional(),
     bloodType: bloodTypeSchema.nullable().optional(),
-    personalNumber: z.union([z.string().trim().max(120), z.null()]).optional(),
+    personalNumber: z.preprocess(
+        (value) => value ?? '',
+        z
+            .string()
+            .trim()
+            .min(1, 'Personal number is required')
+            .max(120, 'Personal number must be at most 120 characters'),
+    ),
     address: z.union([z.string().trim().max(255), z.null()]).optional(),
     emergencyContact: z.union([z.string().trim().max(120), z.null()]).optional(),
     emergencyPhone: z.union([z.string().trim().max(40), z.null()]).optional(),

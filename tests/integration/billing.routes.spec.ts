@@ -111,7 +111,7 @@ describe('Billing routes', () => {
             });
 
         const response = await request(app)
-            .get(`/api/billings?patientId=${patientId}&status=PENDING`)
+            .get(`/api/billings?patientId=${patientId}&search=Ada%20Lovelace&status=PENDING`)
             .set(
                 'Authorization',
                 `Bearer ${createAccessToken(['billing:read:all'])}`,
@@ -122,6 +122,7 @@ describe('Billing routes', () => {
         expect(listSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 patientId,
+                search: 'Ada Lovelace',
                 status: BillingStatus.PENDING,
             }),
         );
@@ -246,6 +247,9 @@ describe('Billing routes', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('application/pdf');
+        expect(response.headers['content-disposition']).toBe(
+            'attachment; filename="ada-lovelace-2026-05-21-bill-20260521-e61720ab.pdf"',
+        );
         expect(response.body.length).toBeGreaterThan(0);
     });
 });

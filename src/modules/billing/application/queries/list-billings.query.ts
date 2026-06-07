@@ -6,6 +6,7 @@ export class ListBillingsQuery implements Query {
         public readonly page: number,
         public readonly limit: number,
         public readonly patientId?: string,
+        public readonly search?: string,
         public readonly status?: BillingStatus,
         public readonly from?: Date,
         public readonly to?: Date,

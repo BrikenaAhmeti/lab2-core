@@ -269,9 +269,45 @@ function toAppointmentBillingSource(
 
 function buildListWhere(filters: ListBillingsFilters) {
     const where: Prisma.BillingWhereInput = {};
+    const search = filters.search?.trim().replace(/\s+/g, ' ');
 
     if (filters.patientId) {
         where.patientId = filters.patientId;
+    }
+
+    if (search) {
+        const terms = search.split(' ');
+
+        where.AND = terms.map((term) => ({
+            patient: {
+                OR: [
+                    {
+                        firstName: {
+                            contains: term,
+                            mode: 'insensitive',
+                        },
+                    },
+                    {
+                        lastName: {
+                            contains: term,
+                            mode: 'insensitive',
+                        },
+                    },
+                    {
+                        email: {
+                            contains: term,
+                            mode: 'insensitive',
+                        },
+                    },
+                    {
+                        phone: {
+                            contains: term,
+                            mode: 'insensitive',
+                        },
+                    },
+                ],
+            },
+        }));
     }
 
     if (filters.status) {

@@ -89,6 +89,20 @@ describe('Patient routes', () => {
         );
     });
 
+    it('rejects patient creation without a personal number', async () => {
+        const response = await request(app)
+            .post('/api/patients')
+            .set('Authorization', `Bearer ${createAccessToken(['patients:create:all'])}`)
+            .send({
+                firstName: 'Arta',
+                lastName: 'Krasniqi',
+                email: 'arta@example.com',
+            });
+
+        expect(response.status).toBe(400);
+        expect(response.body.message).toBe('Personal number is required');
+    });
+
     it('lists patients with pagination and filters', async () => {
         const listSpy = jest.spyOn(PatientPrismaRepository.prototype, 'list').mockResolvedValue({
             items: [patient],

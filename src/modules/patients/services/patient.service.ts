@@ -25,6 +25,10 @@ export class PatientService {
         const personalNumber = normalizePersonalNumber(data.personalNumber);
         const personalNumberHash = hashPersonalNumber(personalNumber);
 
+        if (!personalNumberHash) {
+            throw new AppError('Personal number is required', 400);
+        }
+
         if (data.userId) {
             const existingUserPatient = await this.patientRepository.findByUserId(
                 data.userId,

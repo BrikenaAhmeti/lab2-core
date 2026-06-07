@@ -71,6 +71,27 @@ describe('PatientService', () => {
         );
     });
 
+    it('requires a personal number when creating a patient', async () => {
+        const repository = createRepositoryMock();
+        const service = new PatientService(repository);
+
+        await expect(
+            service.createPatient({
+                firstName: 'Arta',
+                lastName: 'Krasniqi',
+                email: patient.email,
+                personalNumber: ' ',
+                actorUserId: 'admin-user',
+                canCreateAll: true,
+            }),
+        ).rejects.toMatchObject({
+            message: 'Personal number is required',
+            statusCode: 400,
+        });
+
+        expect(repository.create).not.toHaveBeenCalled();
+    });
+
     it('rejects duplicate email', async () => {
         const repository = createRepositoryMock();
         repository.findByEmail.mockResolvedValue(patient);
@@ -81,6 +102,7 @@ describe('PatientService', () => {
                 firstName: 'Arta',
                 lastName: 'Krasniqi',
                 email: patient.email,
+                personalNumber: '9999999999',
                 actorUserId: 'admin-user',
                 canCreateAll: true,
             }),

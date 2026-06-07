@@ -6324,6 +6324,45 @@ async function cleanupLegacyInvalidUuidFixtures() {
     });
 }
 
+async function seedMissingPatientPersonalNumbers() {
+    const patientsMissingPersonalNumber = await prisma.patient.findMany({
+        where: {
+            OR: [{ personalNumber: null }, { personalNumberHash: null }],
+        },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+    });
+
+    let sequence = 1;
+
+    for (const patient of patientsMissingPersonalNumber) {
+        let personalNumber = '';
+        let personalNumberHash: string | null = null;
+        let duplicate: { id: string } | null = null;
+
+        do {
+            personalNumber = `MSP-PAT-BACKFILL-${String(sequence).padStart(4, '0')}`;
+            personalNumberHash = hashPersonalNumber(personalNumber);
+            sequence += 1;
+            duplicate = await prisma.patient.findFirst({
+                where: {
+                    personalNumberHash,
+                    NOT: { id: patient.id },
+                },
+                select: { id: true },
+            });
+        } while (duplicate);
+
+        await prisma.patient.update({
+            where: { id: patient.id },
+            data: {
+                ...personalNumberData(personalNumber),
+                updatedBy: ACTOR_USER_ID,
+            },
+        });
+    }
+}
+
 async function main() {
     await cleanupLegacyInvalidUuidFixtures();
     await seedPermissions();
@@ -6362,6 +6401,7 @@ async function main() {
         appointments,
         clinicalData,
     );
+    await seedMissingPatientPersonalNumbers();
     await assertSeedAppointmentIntegrity();
 
     console.log('Core service seed complete.');

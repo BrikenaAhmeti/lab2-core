@@ -15,6 +15,7 @@ export interface ListBillingsFilters {
     page: number;
     limit: number;
     patientId?: string;
+    search?: string;
     status?: BillingStatus;
     from?: Date;
     to?: Date;

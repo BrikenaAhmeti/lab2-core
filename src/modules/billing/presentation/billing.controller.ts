@@ -6,12 +6,14 @@ import {
 } from '../../../generated/prisma';
 import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
+import { MarkBillingPaidCommand } from '../application/commands/mark-billing-paid.command';
 import { RecordBillingPaymentCommand } from '../application/commands/record-billing-payment.command';
 import { UpdateBillingCommand } from '../application/commands/update-billing.command';
 import { GetBillingByIdHandler } from '../application/handlers/get-billing-by-id.handler';
 import { GetBillingPdfHandler } from '../application/handlers/get-billing-pdf.handler';
 import { GetBillingStatsHandler } from '../application/handlers/get-billing-stats.handler';
 import { ListBillingsHandler } from '../application/handlers/list-billings.handler';
+import { MarkBillingPaidHandler } from '../application/handlers/mark-billing-paid.handler';
 import { RecordBillingPaymentHandler } from '../application/handlers/record-billing-payment.handler';
 import { UpdateBillingHandler } from '../application/handlers/update-billing.handler';
 import { GetBillingByIdQuery } from '../application/queries/get-billing-by-id.query';
@@ -104,6 +106,12 @@ const recordPaymentBodySchema = z.object({
     notes: z.string().trim().max(1000).nullable().optional(),
 });
 
+const markPaidBodySchema = z.object({
+    paymentMethod: z.enum(paymentMethodValues).default('CASH'),
+    referenceNumber: z.string().trim().max(200).nullable().optional(),
+    notes: z.string().trim().max(1000).nullable().optional(),
+});
+
 const listBillingsQuerySchema = z.object({
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(10),
@@ -151,6 +159,7 @@ export class BillingController {
     private readonly recordPaymentHandler = new RecordBillingPaymentHandler(
         this.service,
     );
+    private readonly markPaidHandler = new MarkBillingPaidHandler(this.service);
 
     async list(req: Request, res: Response) {
         const query = listBillingsQuerySchema.parse(req.query);
@@ -213,6 +222,23 @@ export class BillingController {
         );
 
         return res.status(201).json(result);
+    }
+
+    async markPaid(req: Request, res: Response) {
+        const params = idParamsSchema.parse(req.params);
+        const body = markPaidBodySchema.parse(req.body ?? {});
+        const result = await this.commandBus.execute(
+            this.markPaidHandler,
+            new MarkBillingPaidCommand(
+                params.id,
+                body.paymentMethod as PaymentMethod,
+                body.referenceNumber,
+                body.notes,
+                req.user?.id,
+            ),
+        );
+
+        return res.status(200).json(result);
     }
 
     async stats(req: Request, res: Response) {

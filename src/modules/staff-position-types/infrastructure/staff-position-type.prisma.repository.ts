@@ -14,43 +14,59 @@ import {
     UpdateStaffPositionTypeData,
 } from '../domain/staff-position-type.repository';
 
-function toJsonInput(value: string[] | null | undefined) {
-    if (value === undefined) {
-        return undefined;
-    }
+const staffPositionTypeInclude = {
+    applicableDepartments: {
+        include: {
+            department: {
+                select: {
+                    id: true,
+                    name: true,
+                    isActive: true,
+                },
+            },
+        },
+        orderBy: {
+            department: {
+                name: 'asc',
+            },
+        },
+    },
+} satisfies Prisma.StaffPositionTypeInclude;
 
-    if (value === null) {
-        return Prisma.DbNull;
-    }
+type StaffPositionTypeRecord = Prisma.StaffPositionTypeGetPayload<{
+    include: typeof staffPositionTypeInclude;
+}>;
 
-    return value as Prisma.InputJsonValue;
-}
-
-function parseApplicableDepartmentIds(value: Prisma.JsonValue | null) {
-    if (!Array.isArray(value)) {
+function applicableDepartmentIds(positionType: StaffPositionTypeRecord) {
+    if (positionType.appliesToAllDepartments) {
         return null;
     }
 
-    return value.filter((item): item is string => typeof item === 'string');
+    return positionType.applicableDepartments.map(
+        (assignment) => assignment.departmentId,
+    );
 }
 
-function toEntity(
-    positionType: {
-        id: string;
-        name: string;
-        description: string | null;
-        defaultRoleKey: string;
-        applicableDepartmentIds: Prisma.JsonValue | null;
-        isActive: boolean;
-        createdAt: Date;
-        updatedAt: Date;
-    },
-): StaffPositionTypeEntity {
+function applicableDepartmentSummaries(
+    positionType: StaffPositionTypeRecord,
+): StaffPositionTypeDepartmentSummary[] {
+    if (positionType.appliesToAllDepartments) {
+        return [];
+    }
+
+    return positionType.applicableDepartments.map((assignment) => assignment.department);
+}
+
+function toEntity(positionType: StaffPositionTypeRecord): StaffPositionTypeEntity {
     return {
-        ...positionType,
-        applicableDepartmentIds: parseApplicableDepartmentIds(
-            positionType.applicableDepartmentIds,
-        ),
+        id: positionType.id,
+        name: positionType.name,
+        description: positionType.description,
+        defaultRoleKey: positionType.defaultRoleKey,
+        applicableDepartmentIds: applicableDepartmentIds(positionType),
+        isActive: positionType.isActive,
+        createdAt: positionType.createdAt,
+        updatedAt: positionType.updatedAt,
     };
 }
 
@@ -73,9 +89,17 @@ export class StaffPositionTypePrismaRepository
                 name: data.name,
                 description: data.description ?? null,
                 defaultRoleKey: data.defaultRoleKey,
-                applicableDepartmentIds: toJsonInput(data.applicableDepartmentIds),
+                appliesToAllDepartments: data.applicableDepartmentIds == null,
+                applicableDepartments: data.applicableDepartmentIds?.length
+                    ? {
+                        create: data.applicableDepartmentIds.map((departmentId) => ({
+                            departmentId,
+                        })),
+                    }
+                    : undefined,
                 isActive: data.isActive,
             },
+            include: staffPositionTypeInclude,
         });
 
         return toEntity(positionType);
@@ -84,18 +108,14 @@ export class StaffPositionTypePrismaRepository
     async findById(id: string): Promise<StaffPositionTypeView | null> {
         const positionType = await prisma.staffPositionType.findUnique({
             where: { id },
+            include: staffPositionTypeInclude,
         });
 
         if (!positionType) {
             return null;
         }
 
-        const entity = toEntity(positionType);
-        const departments = await this.findDepartmentsByIds(
-            entity.applicableDepartmentIds ?? [],
-        );
-
-        return toView(entity, departments);
+        return toView(toEntity(positionType), applicableDepartmentSummaries(positionType));
     }
 
     async findByName(name: string): Promise<StaffPositionTypeEntity | null> {
@@ -106,6 +126,7 @@ export class StaffPositionTypePrismaRepository
                     mode: 'insensitive',
                 },
             },
+            include: staffPositionTypeInclude,
         });
 
         return positionType ? toEntity(positionType) : null;
@@ -123,32 +144,12 @@ export class StaffPositionTypePrismaRepository
         const positionTypes = await prisma.staffPositionType.findMany({
             where,
             orderBy: [{ name: 'asc' }],
+            include: staffPositionTypeInclude,
         });
 
-        const entities = positionTypes.map((positionType) => toEntity(positionType));
-        const departmentIds = [
-            ...new Set(
-                entities.flatMap(
-                    (positionType) => positionType.applicableDepartmentIds ?? [],
-                ),
-            ),
-        ];
-        const departments = await this.findDepartmentsByIds(departmentIds);
-        const departmentsById = new Map(departments.map((department) => [department.id, department]));
-
         return {
-            items: entities.map((positionType) =>
-                toView(
-                    positionType,
-                    (positionType.applicableDepartmentIds ?? [])
-                        .map((departmentId) => departmentsById.get(departmentId))
-                        .filter(
-                            (
-                                department,
-                            ): department is StaffPositionTypeDepartmentSummary =>
-                                Boolean(department),
-                        ),
-                ),
+            items: positionTypes.map((positionType) =>
+                toView(toEntity(positionType), applicableDepartmentSummaries(positionType)),
             ),
         };
     }
@@ -157,12 +158,31 @@ export class StaffPositionTypePrismaRepository
         id: string,
         data: UpdateStaffPositionTypeData,
     ): Promise<StaffPositionTypeEntity> {
+        const updateData: Prisma.StaffPositionTypeUpdateInput = {
+            name: data.name,
+            description: data.description,
+            defaultRoleKey: data.defaultRoleKey,
+            isActive: data.isActive,
+        };
+
+        if (data.applicableDepartmentIds !== undefined) {
+            updateData.appliesToAllDepartments = data.applicableDepartmentIds === null;
+            updateData.applicableDepartments = {
+                deleteMany: {},
+                ...(data.applicableDepartmentIds?.length
+                    ? {
+                        create: data.applicableDepartmentIds.map((departmentId) => ({
+                            departmentId,
+                        })),
+                    }
+                    : {}),
+            };
+        }
+
         const positionType = await prisma.staffPositionType.update({
             where: { id },
-            data: {
-                ...data,
-                applicableDepartmentIds: toJsonInput(data.applicableDepartmentIds),
-            },
+            data: updateData,
+            include: staffPositionTypeInclude,
         });
 
         return toEntity(positionType);
@@ -174,6 +194,7 @@ export class StaffPositionTypePrismaRepository
             data: {
                 isActive: false,
             },
+            include: staffPositionTypeInclude,
         });
 
         return toEntity(positionType);

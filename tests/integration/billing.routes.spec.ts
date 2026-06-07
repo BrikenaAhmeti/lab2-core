@@ -232,6 +232,53 @@ describe('Billing routes', () => {
         );
     });
 
+    it('marks the outstanding billing balance as paid', async () => {
+        const partiallyPaidBilling = {
+            ...billing,
+            status: BillingStatus.PARTIALLY_PAID,
+            amountPaid: 25,
+            outstandingAmount: 55,
+        };
+        jest.spyOn(
+            BillingPrismaRepository.prototype,
+            'findBillingById',
+        ).mockResolvedValue(partiallyPaidBilling);
+        const paymentSpy = jest
+            .spyOn(BillingPrismaRepository.prototype, 'recordPayment')
+            .mockResolvedValue({
+                ...partiallyPaidBilling,
+                status: BillingStatus.PAID,
+                amountPaid: 80,
+                outstandingAmount: 0,
+                paidAt: new Date('2026-05-21T13:00:00.000Z'),
+            });
+
+        const response = await request(app)
+            .post(`/api/billings/${billingId}/mark-paid`)
+            .set(
+                'Authorization',
+                `Bearer ${createAccessToken(['billing:manage:all'])}`,
+            )
+            .send({
+                paymentMethod: 'CASH',
+                referenceNumber: ' CASH-001 ',
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe(BillingStatus.PAID);
+        expect(paymentSpy).toHaveBeenCalledWith(
+            billingId,
+            expect.objectContaining({
+                amount: 55,
+                paymentMethod: PaymentMethod.CASH,
+                referenceNumber: 'CASH-001',
+                newAmountPaid: 80,
+                newStatus: BillingStatus.PAID,
+                billingPaidAt: expect.any(Date),
+            }),
+        );
+    });
+
     it('downloads a billing PDF', async () => {
         jest.spyOn(
             BillingPrismaRepository.prototype,

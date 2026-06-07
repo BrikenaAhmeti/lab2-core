@@ -532,13 +532,16 @@ async function seedStaffPositionTypes() {
             update: {
                 description: positionType.description,
                 defaultRoleKey: positionType.defaultRoleKey,
-                applicableDepartmentIds: Prisma.JsonNull,
+                appliesToAllDepartments: true,
+                applicableDepartments: {
+                    deleteMany: {},
+                },
                 isActive: true,
                 updatedBy: ACTOR_USER_ID,
             },
             create: {
                 ...positionType,
-                applicableDepartmentIds: Prisma.JsonNull,
+                appliesToAllDepartments: true,
                 isActive: true,
                 createdBy: ACTOR_USER_ID,
                 updatedBy: ACTOR_USER_ID,

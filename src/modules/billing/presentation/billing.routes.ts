@@ -84,3 +84,16 @@ billingRoutes.post(
         }
     },
 );
+
+billingRoutes.post(
+    '/:id/mark-paid',
+    authMiddleware,
+    requirePermission('billing:manage', 'all'),
+    async (req, res, next) => {
+        try {
+            await controller.markPaid(req, res);
+        } catch (error) {
+            next(error);
+        }
+    },
+);

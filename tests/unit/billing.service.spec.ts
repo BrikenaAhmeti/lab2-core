@@ -239,6 +239,44 @@ describe('BillingService', () => {
         );
     });
 
+    it('marks the remaining billing balance as paid', async () => {
+        const repository = createRepositoryMock();
+        const partiallyPaidBilling = {
+            ...billing,
+            status: BillingStatus.PARTIALLY_PAID,
+            amountPaid: 40,
+            outstandingAmount: 60,
+        };
+        repository.findBillingById.mockResolvedValue(partiallyPaidBilling);
+        repository.recordPayment.mockResolvedValue({
+            ...partiallyPaidBilling,
+            status: BillingStatus.PAID,
+            amountPaid: 100,
+            outstandingAmount: 0,
+            paidAt: now,
+        });
+        const service = new BillingService(repository, () => now);
+
+        const result = await service.markPaid(billingId, {
+            paymentMethod: PaymentMethod.CASH,
+            referenceNumber: ' CASH-001 ',
+            actorUserId,
+        });
+
+        expect(result.status).toBe(BillingStatus.PAID);
+        expect(repository.recordPayment).toHaveBeenCalledWith(
+            billingId,
+            expect.objectContaining({
+                amount: 60,
+                paymentMethod: PaymentMethod.CASH,
+                referenceNumber: 'CASH-001',
+                newAmountPaid: 100,
+                newStatus: BillingStatus.PAID,
+                billingPaidAt: now,
+            }),
+        );
+    });
+
     it('blocks payments larger than the outstanding amount', async () => {
         const repository = createRepositoryMock();
         repository.findBillingById.mockResolvedValue(billing);

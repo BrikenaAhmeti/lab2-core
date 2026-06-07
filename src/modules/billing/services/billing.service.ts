@@ -270,6 +270,48 @@ export class BillingService {
     ) {
         const billing = await this.getExistingBilling(id);
 
+        return this.recordPaymentForBilling(billing, data);
+    }
+
+    async markPaid(
+        id: string,
+        data: {
+            paymentMethod: PaymentMethod;
+            referenceNumber?: string | null;
+            notes?: string | null;
+            actorUserId?: string;
+        },
+    ) {
+        const billing = await this.getExistingBilling(id);
+        const outstanding = roundMoney(billing.totalAmount - billing.amountPaid);
+
+        return this.recordPaymentForBilling(billing, {
+            amount: outstanding,
+            paymentMethod: data.paymentMethod,
+            referenceNumber: data.referenceNumber,
+            notes: data.notes,
+            actorUserId: data.actorUserId,
+        });
+    }
+
+    async getBillingStats(filters: BillingStatsFilters) {
+        if (filters.from && filters.to && filters.from > filters.to) {
+            throw new AppError('from must be before or equal to to', 400);
+        }
+
+        return this.billingRepository.getBillingStats(filters);
+    }
+
+    private async recordPaymentForBilling(
+        billing: BillingView,
+        data: {
+            amount: number;
+            paymentMethod: PaymentMethod;
+            referenceNumber?: string | null;
+            notes?: string | null;
+            actorUserId?: string;
+        },
+    ) {
         if (billing.status === BillingStatus.CANCELLED) {
             throw new AppError('Cancelled billings cannot receive payments', 409);
         }
@@ -293,7 +335,7 @@ export class BillingService {
         const newAmountPaid = roundMoney(billing.amountPaid + amount);
         const isPaid = newAmountPaid >= billing.totalAmount;
 
-        return this.billingRepository.recordPayment(id, {
+        return this.billingRepository.recordPayment(billing.id, {
             amount,
             paymentMethod: data.paymentMethod,
             referenceNumber: normalizeOptionalText(data.referenceNumber),
@@ -304,14 +346,6 @@ export class BillingService {
             newStatus: isPaid ? BillingStatus.PAID : BillingStatus.PARTIALLY_PAID,
             billingPaidAt: isPaid ? paidAt : null,
         });
-    }
-
-    async getBillingStats(filters: BillingStatsFilters) {
-        if (filters.from && filters.to && filters.from > filters.to) {
-            throw new AppError('from must be before or equal to to', 400);
-        }
-
-        return this.billingRepository.getBillingStats(filters);
     }
 
     private async getExistingBilling(id: string) {

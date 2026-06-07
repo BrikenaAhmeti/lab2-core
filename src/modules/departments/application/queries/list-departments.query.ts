@@ -8,5 +8,8 @@ export class ListDepartmentsQuery implements Query {
         public readonly isActive?: boolean,
         public readonly sortBy?: 'name' | 'sortOrder' | 'createdAt' | 'updatedAt',
         public readonly sortDirection?: 'asc' | 'desc',
+        public readonly openAt?: string,
+        public readonly openFrom?: string,
+        public readonly openTo?: string,
     ) { }
 }

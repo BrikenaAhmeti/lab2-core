@@ -17,6 +17,9 @@ export interface ListDepartmentsFilters {
     isActive?: boolean;
     sortBy?: 'name' | 'sortOrder' | 'createdAt' | 'updatedAt';
     sortDirection?: 'asc' | 'desc';
+    openAt?: string;
+    openFrom?: string;
+    openTo?: string;
 }
 
 export interface UpdateDepartmentData {

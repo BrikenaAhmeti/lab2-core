@@ -101,6 +101,21 @@ departmentRoutes.post(
  *         schema:
  *           type: string
  *           enum: [asc, desc]
+ *       - in: query
+ *         name: openAt
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: openFrom
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: openTo
+ *         schema:
+ *           type: string
+ *           format: date-time
  *     responses:
  *       200:
  *         description: Paginated department list

@@ -99,6 +99,50 @@ describe('StaffService', () => {
         );
     });
 
+    it('provisions an auth account when a staff profile is created without a user id', async () => {
+        const repository = createRepositoryMock();
+        const authClient = {
+            provisionAccount: jest.fn().mockResolvedValue({
+                id: staffProfile.userId,
+                email: 'doctor@medsphere.local',
+                firstName: 'Ana',
+                lastName: 'Doctor',
+                isActive: false,
+                roles: ['Doctor'],
+            }),
+        };
+        repository.findPositionTypeById.mockResolvedValue(positionType);
+        repository.findByEmployeeCode.mockResolvedValue(null);
+        repository.findDepartmentsByIds.mockResolvedValue([department]);
+        repository.createWithDepartments.mockResolvedValue(staffProfile);
+        const service = new StaffService(repository, authClient);
+
+        await service.createStaffProfile({
+            firstName: ' Ana ',
+            lastName: ' Doctor ',
+            email: ' DOCTOR@MEDSPHERE.LOCAL ',
+            staffPositionTypeId: positionType.id,
+            employeeCode: 'DR-001',
+            departments: [{ departmentId: department.id }],
+            actorUserId: 'admin-user',
+        });
+
+        expect(authClient.provisionAccount).toHaveBeenCalledWith(
+            expect.objectContaining({
+                actorUserId: 'admin-user',
+                firstName: 'Ana',
+                lastName: 'Doctor',
+                email: 'doctor@medsphere.local',
+                roles: ['Doctor'],
+            }),
+        );
+        expect(repository.createWithDepartments).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: staffProfile.userId,
+            }),
+        );
+    });
+
     it('rejects duplicate staff profiles for the same user', async () => {
         const repository = createRepositoryMock();
         repository.findPositionTypeById.mockResolvedValue(positionType);

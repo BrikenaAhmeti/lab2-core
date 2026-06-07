@@ -71,6 +71,53 @@ describe('PatientService', () => {
         );
     });
 
+    it('provisions an auth account when a patient is created without a user id', async () => {
+        const repository = createRepositoryMock();
+        const authClient = {
+            provisionAccount: jest.fn().mockResolvedValue({
+                id: 'provisioned-user',
+                email: 'arta@example.com',
+                firstName: 'Arta',
+                lastName: 'Krasniqi',
+                isActive: false,
+                roles: ['Patient'],
+            }),
+        };
+        repository.findByEmail.mockResolvedValue(null);
+        repository.findByPersonalNumberHash.mockResolvedValue(null);
+        repository.create.mockResolvedValue({
+            ...patient,
+            userId: 'provisioned-user',
+        });
+        const service = new PatientService(repository, authClient);
+
+        await service.createPatient({
+            firstName: 'Arta',
+            lastName: 'Krasniqi',
+            email: ' arta@example.com ',
+            phone: '+38344111222',
+            gender: 'female',
+            personalNumber: ' 1234567890 ',
+            actorUserId: 'admin-user',
+            canCreateAll: true,
+        });
+
+        expect(authClient.provisionAccount).toHaveBeenCalledWith(
+            expect.objectContaining({
+                firstName: 'Arta',
+                lastName: 'Krasniqi',
+                email: 'arta@example.com',
+                roles: ['Patient'],
+                personalNumber: '1234567890',
+            }),
+        );
+        expect(repository.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: 'provisioned-user',
+            }),
+        );
+    });
+
     it('requires a personal number when creating a patient', async () => {
         const repository = createRepositoryMock();
         const service = new PatientService(repository);

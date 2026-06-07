@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { BloodType } from '../../../generated/prisma';
 import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
+import { HttpAuthAccountProvisioningClient } from '../../../shared/auth/auth-account-provisioning.client';
 import { CreatePatientCommand } from '../application/commands/create-patient.command';
 import { LinkPatientByPersonalNumberCommand } from '../application/commands/link-patient-by-personal-number.command';
 import { UpdatePatientCommand } from '../application/commands/update-patient.command';
@@ -108,7 +109,10 @@ function toBloodType(value?: z.infer<typeof bloodTypeSchema> | null) {
 export class PatientController {
     private readonly commandBus = new CommandBus();
     private readonly queryBus = new QueryBus();
-    private readonly service = new PatientService(new PatientPrismaRepository());
+    private readonly service = new PatientService(
+        new PatientPrismaRepository(),
+        new HttpAuthAccountProvisioningClient(),
+    );
     private readonly createPatientHandler = new CreatePatientHandler(this.service);
     private readonly updatePatientHandler = new UpdatePatientHandler(this.service);
     private readonly listPatientsHandler = new ListPatientsHandler(this.service);

@@ -1,4 +1,5 @@
 import { BloodType } from '../../../generated/prisma';
+import type { AuthAccountProvisioningClient } from '../../../shared/auth/auth-account-provisioning.client';
 import { AppError } from '../../../shared/core/errors/app-error';
 import {
     decryptPersonalNumber,
@@ -18,7 +19,10 @@ import {
 } from '../domain/patient.repository';
 
 export class PatientService {
-    constructor(private readonly patientRepository: PatientRepository) {}
+    constructor(
+        private readonly patientRepository: PatientRepository,
+        private readonly authAccountProvisioningClient?: AuthAccountProvisioningClient,
+    ) {}
 
     async createPatient(data: CreatePatientData) {
         const email = normalizeEmail(data.email);
@@ -45,8 +49,33 @@ export class PatientService {
 
         await this.ensureNoDuplicate(email, personalNumberHash);
 
+        let userId = data.userId ?? null;
+
+        if (!userId) {
+            if (!email) {
+                throw new AppError('Patient email is required to create an account', 400);
+            }
+
+            if (!this.authAccountProvisioningClient) {
+                throw new AppError('Auth account provisioning is not configured', 503);
+            }
+
+            const account = await this.authAccountProvisioningClient.provisionAccount({
+                actorUserId: data.actorUserId,
+                firstName: data.firstName,
+                lastName: data.lastName,
+                email,
+                roles: ['Patient'],
+                phone: data.phone,
+                dateOfBirth: data.dateOfBirth,
+                gender: data.gender,
+                personalNumber,
+            });
+            userId = account.id;
+        }
+
         return this.patientRepository.create({
-            userId: data.userId ?? null,
+            userId,
             firstName: this.requiredText(data.firstName, 'First name'),
             lastName: this.requiredText(data.lastName, 'Last name'),
             email,

@@ -7,6 +7,14 @@ export class CreateStaffProfileHandler {
     async execute(command: CreateStaffProfileCommand) {
         return this.staffService.createStaffProfile({
             userId: command.userId,
+            firstName: command.firstName,
+            lastName: command.lastName,
+            email: command.email,
+            username: command.username,
+            phone: command.phone,
+            dateOfBirth: command.dateOfBirth,
+            gender: command.gender,
+            personalNumber: command.personalNumber,
             staffPositionTypeId: command.staffPositionTypeId,
             employeeCode: command.employeeCode,
             specialization: command.specialization,

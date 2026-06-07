@@ -1,4 +1,5 @@
 import { EmploymentStatus } from '../../../generated/prisma';
+import type { AuthAccountProvisioningClient } from '../../../shared/auth/auth-account-provisioning.client';
 import { AppError } from '../../../shared/core/errors/app-error';
 import { normalizeEmployeeCode, normalizeOptionalText, normalizeSearch } from '../domain/staff.normalizer';
 import {
@@ -8,10 +9,21 @@ import {
 } from '../domain/staff.repository';
 
 export class StaffService {
-    constructor(private readonly staffRepository: StaffRepository) { }
+    constructor(
+        private readonly staffRepository: StaffRepository,
+        private readonly authAccountProvisioningClient?: AuthAccountProvisioningClient,
+    ) { }
 
     async createStaffProfile(data: {
-        userId: string;
+        userId?: string | null;
+        firstName?: string | null;
+        lastName?: string | null;
+        email?: string | null;
+        username?: string | null;
+        phone?: string | null;
+        dateOfBirth?: Date | null;
+        gender?: string | null;
+        personalNumber?: string | null;
         staffPositionTypeId: string;
         employeeCode: string;
         specialization?: string | null;
@@ -31,10 +43,12 @@ export class StaffService {
             throw new AppError('Staff position type not found or inactive', 400);
         }
 
-        const existingUserProfile = await this.staffRepository.findByUserId(data.userId);
+        if (data.userId) {
+            const existingUserProfile = await this.staffRepository.findByUserId(data.userId);
 
-        if (existingUserProfile) {
-            throw new AppError('Staff profile already exists for this user', 409);
+            if (existingUserProfile) {
+                throw new AppError('Staff profile already exists for this user', 409);
+            }
         }
 
         const employeeCode = normalizeEmployeeCode(data.employeeCode);
@@ -48,8 +62,10 @@ export class StaffService {
         const departments = this.normalizeDepartmentAssignments(data.departments);
         await this.ensureDepartmentsExist(departments.map((item) => item.departmentId));
 
+        const userId = data.userId ?? (await this.provisionStaffAccount(data, positionType));
+
         return this.staffRepository.createWithDepartments({
-            userId: data.userId,
+            userId,
             staffPositionTypeId: data.staffPositionTypeId,
             employeeCode,
             specialization: normalizeOptionalText(data.specialization),
@@ -61,6 +77,62 @@ export class StaffService {
             departments,
             actorUserId: data.actorUserId,
         });
+    }
+
+    private async provisionStaffAccount(
+        data: {
+            firstName?: string | null;
+            lastName?: string | null;
+            email?: string | null;
+            username?: string | null;
+            phone?: string | null;
+            dateOfBirth?: Date | null;
+            gender?: string | null;
+            personalNumber?: string | null;
+            actorUserId?: string;
+        },
+        positionType: { name: string; defaultRoleKey?: string | null },
+    ) {
+        const firstName = normalizeOptionalText(data.firstName);
+        const lastName = normalizeOptionalText(data.lastName);
+        const email = normalizeOptionalText(data.email)?.toLowerCase();
+
+        if (!firstName || !lastName || !email) {
+            throw new AppError('Staff first name, last name, and email are required to create an account', 400);
+        }
+
+        if (!this.authAccountProvisioningClient) {
+            throw new AppError('Auth account provisioning is not configured', 503);
+        }
+
+        const account = await this.authAccountProvisioningClient.provisionAccount({
+            actorUserId: data.actorUserId,
+            firstName,
+            lastName,
+            email,
+            username: normalizeOptionalText(data.username) ?? undefined,
+            roles: [this.resolveRoleName(positionType)],
+            phone: data.phone,
+            dateOfBirth: data.dateOfBirth,
+            gender: data.gender,
+            personalNumber: data.personalNumber,
+        });
+
+        return account.id;
+    }
+
+    private resolveRoleName(positionType: { name: string; defaultRoleKey?: string | null }) {
+        const roleByKey: Record<string, string> = {
+            admin: 'Admin',
+            doctor: 'Doctor',
+            nurse: 'Nurse',
+            receptionist: 'Receptionist',
+            lab_technician: 'Lab Technician',
+            pharmacist: 'Pharmacist',
+        };
+        const key = positionType.defaultRoleKey?.trim().toLowerCase();
+
+        return key ? roleByKey[key] ?? positionType.name : positionType.name;
     }
 
     async getStaffProfileById(id: string) {

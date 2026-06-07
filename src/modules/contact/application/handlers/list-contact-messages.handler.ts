@@ -13,6 +13,9 @@ export class ListContactMessagesHandler
             page: query.page,
             limit: query.limit,
             status: query.status,
+            search: query.search,
+            createdAtFrom: query.createdAtFrom,
+            createdAtTo: query.createdAtTo,
         });
     }
 }

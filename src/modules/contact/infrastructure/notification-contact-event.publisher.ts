@@ -33,7 +33,7 @@ export class NotificationContactEventPublisher implements ContactEventPublisher 
             return [];
         }
 
-        return [...new Set(payload.adminUserIds)].map((userId) =>
+        return [...new Set(payload.adminUserIds ?? [])].map((userId) =>
             this.toAdminNotification(userId, payload.message),
         );
     }

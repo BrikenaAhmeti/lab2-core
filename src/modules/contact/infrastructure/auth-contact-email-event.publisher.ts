@@ -5,12 +5,12 @@ import {
 } from '../domain/contact-event.publisher';
 import {
     AuthContactEmailClient,
-    ContactAcknowledgementEmailClient,
+    ContactEmailClient,
 } from './auth-contact-email.client';
 
 export class AuthContactEmailEventPublisher implements ContactEventPublisher {
     constructor(
-        private readonly client: ContactAcknowledgementEmailClient = new AuthContactEmailClient(),
+        private readonly client: ContactEmailClient = new AuthContactEmailClient(),
     ) {}
 
     async publish(
@@ -18,10 +18,19 @@ export class AuthContactEmailEventPublisher implements ContactEventPublisher {
         payload: ContactEventPayload,
     ): Promise<void> {
         if (type !== 'ContactMessageSubmitted') {
+            if (type === 'ContactMessageReplied' && payload.replyText) {
+                await this.client.sendReply({
+                    name: payload.message.name,
+                    email: payload.message.email,
+                    subject: payload.message.subject,
+                    replyText: payload.replyText,
+                });
+            }
+
             return;
         }
 
-        await this.client.send({
+        await this.client.sendAcknowledgement({
             name: payload.message.name,
             email: payload.message.email,
             subject: payload.message.subject,

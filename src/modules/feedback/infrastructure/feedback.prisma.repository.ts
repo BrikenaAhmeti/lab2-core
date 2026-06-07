@@ -150,12 +150,95 @@ function toFeedbackView(feedback: FeedbackRecord): FeedbackView {
     };
 }
 
+function textContains(value: string) {
+    return {
+        contains: value,
+        mode: 'insensitive' as const,
+    };
+}
+
+function toSearchTerms(value?: string) {
+    const search = value?.trim().replace(/\s+/g, ' ');
+
+    return search ? search.split(' ') : [];
+}
+
+function buildPatientSearchFilters(terms: string[]): Prisma.FeedbackWhereInput[] {
+    return terms.map((term) => ({
+        patient: {
+            OR: [
+                {
+                    firstName: textContains(term),
+                },
+                {
+                    lastName: textContains(term),
+                },
+                {
+                    email: textContains(term),
+                },
+                {
+                    phone: textContains(term),
+                },
+            ],
+        },
+    }));
+}
+
+function buildAppointmentSearchFilters(
+    terms: string[],
+): Prisma.AppointmentWhereInput[] {
+    return terms.map((term) => ({
+        OR: [
+            {
+                id: textContains(term),
+            },
+            {
+                serviceCatalog: {
+                    name: textContains(term),
+                },
+            },
+            {
+                department: {
+                    name: textContains(term),
+                },
+            },
+            {
+                staffProfile: {
+                    is: {
+                        employeeCode: textContains(term),
+                    },
+                },
+            },
+            {
+                staffProfile: {
+                    is: {
+                        specialization: textContains(term),
+                    },
+                },
+            },
+        ],
+    }));
+}
+
 function buildListWhere(filters: ListFeedbackFilters) {
     const where: Prisma.FeedbackWhereInput = {};
     const appointmentWhere: Prisma.AppointmentWhereInput = {};
+    const andFilters = buildPatientSearchFilters(
+        toSearchTerms(filters.patientSearch),
+    );
+    const appointmentAndFilters = buildAppointmentSearchFilters(
+        toSearchTerms(filters.appointmentSearch),
+    );
 
     if (filters.status) {
         where.status = filters.status;
+    }
+
+    if (filters.submittedAtFrom || filters.submittedAtTo) {
+        where.submittedAt = {
+            gte: filters.submittedAtFrom,
+            lt: filters.submittedAtTo,
+        };
     }
 
     if (filters.staffProfileId) {
@@ -166,10 +249,18 @@ function buildListWhere(filters: ListFeedbackFilters) {
         appointmentWhere.departmentId = filters.departmentId;
     }
 
+    if (appointmentAndFilters.length > 0) {
+        appointmentWhere.AND = appointmentAndFilters;
+    }
+
     if (Object.keys(appointmentWhere).length > 0) {
         where.appointment = {
             is: appointmentWhere,
         };
+    }
+
+    if (andFilters.length > 0) {
+        where.AND = andFilters;
     }
 
     return where;

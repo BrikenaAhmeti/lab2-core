@@ -16,6 +16,14 @@ export class LinkPatientByPersonalNumberHandler
         return this.patientService.linkByPersonalNumber(
             command.userId,
             command.personalNumber,
+            {
+                firstName: command.firstName,
+                lastName: command.lastName,
+                email: command.email,
+                phone: command.phone,
+                dateOfBirth: command.dateOfBirth,
+                gender: command.gender,
+            },
         );
     }
 }

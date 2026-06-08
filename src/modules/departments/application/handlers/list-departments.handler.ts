@@ -15,6 +15,9 @@ export class ListDepartmentsHandler
             isActive: query.isActive,
             sortBy: query.sortBy,
             sortDirection: query.sortDirection,
+            openAt: query.openAt,
+            openFrom: query.openFrom,
+            openTo: query.openTo,
         });
     }
 }

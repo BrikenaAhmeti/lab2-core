@@ -111,7 +111,7 @@ describe('Billing routes', () => {
             });
 
         const response = await request(app)
-            .get(`/api/billings?patientId=${patientId}&status=PENDING`)
+            .get(`/api/billings?patientId=${patientId}&search=Ada%20Lovelace&status=PENDING`)
             .set(
                 'Authorization',
                 `Bearer ${createAccessToken(['billing:read:all'])}`,
@@ -122,6 +122,7 @@ describe('Billing routes', () => {
         expect(listSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 patientId,
+                search: 'Ada Lovelace',
                 status: BillingStatus.PENDING,
             }),
         );
@@ -231,6 +232,53 @@ describe('Billing routes', () => {
         );
     });
 
+    it('marks the outstanding billing balance as paid', async () => {
+        const partiallyPaidBilling = {
+            ...billing,
+            status: BillingStatus.PARTIALLY_PAID,
+            amountPaid: 25,
+            outstandingAmount: 55,
+        };
+        jest.spyOn(
+            BillingPrismaRepository.prototype,
+            'findBillingById',
+        ).mockResolvedValue(partiallyPaidBilling);
+        const paymentSpy = jest
+            .spyOn(BillingPrismaRepository.prototype, 'recordPayment')
+            .mockResolvedValue({
+                ...partiallyPaidBilling,
+                status: BillingStatus.PAID,
+                amountPaid: 80,
+                outstandingAmount: 0,
+                paidAt: new Date('2026-05-21T13:00:00.000Z'),
+            });
+
+        const response = await request(app)
+            .post(`/api/billings/${billingId}/mark-paid`)
+            .set(
+                'Authorization',
+                `Bearer ${createAccessToken(['billing:manage:all'])}`,
+            )
+            .send({
+                paymentMethod: 'CASH',
+                referenceNumber: ' CASH-001 ',
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe(BillingStatus.PAID);
+        expect(paymentSpy).toHaveBeenCalledWith(
+            billingId,
+            expect.objectContaining({
+                amount: 55,
+                paymentMethod: PaymentMethod.CASH,
+                referenceNumber: 'CASH-001',
+                newAmountPaid: 80,
+                newStatus: BillingStatus.PAID,
+                billingPaidAt: expect.any(Date),
+            }),
+        );
+    });
+
     it('downloads a billing PDF', async () => {
         jest.spyOn(
             BillingPrismaRepository.prototype,
@@ -246,6 +294,9 @@ describe('Billing routes', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('application/pdf');
+        expect(response.headers['content-disposition']).toBe(
+            'attachment; filename="ada-lovelace-2026-05-21-bill-20260521-e61720ab.pdf"',
+        );
         expect(response.body.length).toBeGreaterThan(0);
     });
 });

@@ -264,6 +264,7 @@ const exportEntities = [
     'inventory-items',
     'billings',
     'audit-logs',
+    'staff',
 ];
 const importEntities = [
     'patients',
@@ -2637,6 +2638,20 @@ const paths = {
             parameters: [
                 ...pageParams,
                 queryParam('status', { type: 'string', enum: ['new', 'read', 'replied'] }),
+                queryParam('search', {
+                    type: 'string',
+                    description: 'Search sender name, email, or phone.',
+                }),
+                queryParam('createdAtFrom', {
+                    type: 'string',
+                    format: 'date',
+                    description: 'Received date lower bound.',
+                }),
+                queryParam('createdAtTo', {
+                    type: 'string',
+                    format: 'date',
+                    description: 'Received date upper bound.',
+                }),
             ],
             responses: {
                 200: jsonResponse('Contact message list', ref('ContactMessageListResponse')),
@@ -2657,7 +2672,7 @@ const paths = {
     '/api/contact/{id}/status': {
         patch: operation({
             tags: ['Contact'],
-            summary: 'Update contact message status',
+            summary: 'Update contact message status or send a reply',
             parameters: [idParam()],
             requestBody: jsonRequest(ref('UpdateContactStatusRequest')),
             responses: {

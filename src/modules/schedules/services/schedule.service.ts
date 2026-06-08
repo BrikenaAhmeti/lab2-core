@@ -18,6 +18,7 @@ import {
     generateAvailableSlots,
     parseTimeToMinutes,
 } from '../domain/slot-generator';
+import { isFutureScheduleClockDate } from '../domain/schedule-time';
 
 const DEFAULT_SCHEDULE_START_MINUTES = 8 * 60;
 const DEFAULT_SCHEDULE_END_MINUTES = 17 * 60;
@@ -42,6 +43,7 @@ export class ScheduleService {
     constructor(
         private readonly scheduleRepository: ScheduleRepository,
         private readonly slotLockRepository: SlotLockRepository,
+        private readonly nowProvider: () => Date = () => new Date(),
     ) { }
 
     async getWeeklySchedule(staffProfileId: string): Promise<WeeklyScheduleView> {
@@ -242,7 +244,9 @@ export class ScheduleService {
                 unavailableExceptions: exceptions,
                 bookedAppointments,
                 lockedSlots,
-            }),
+            }).filter((slot) =>
+                isFutureScheduleClockDate(new Date(slot.start), this.nowProvider()),
+            ),
         };
     }
 

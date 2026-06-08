@@ -16,6 +16,65 @@ import { NotificationFeedbackEventPublisher } from '../infrastructure/notificati
 import { FeedbackService } from '../services/feedback.service';
 
 const feedbackStatusValues = ['pending', 'published', 'hidden'] as const;
+const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+
+const optionalTrimmedQueryString = z.preprocess((value) => {
+    if (value === undefined || value === '') {
+        return undefined;
+    }
+
+    return value;
+}, z.string().trim().min(1).max(120).optional());
+
+function addUtcDays(date: Date, days: number) {
+    const next = new Date(date);
+    next.setUTCDate(next.getUTCDate() + days);
+    return next;
+}
+
+function parseDateOnly(value: string) {
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    if (
+        date.getUTCFullYear() !== year ||
+        date.getUTCMonth() !== month - 1 ||
+        date.getUTCDate() !== day
+    ) {
+        return null;
+    }
+
+    return date;
+}
+
+function parseSubmittedDateBoundary(
+    value: string,
+    boundary: 'from' | 'to',
+) {
+    const trimmedValue = value.trim();
+    const date = dateOnlyPattern.test(trimmedValue)
+        ? parseDateOnly(trimmedValue)
+        : new Date(trimmedValue);
+
+    if (!date || Number.isNaN(date.getTime())) {
+        return new Date(Number.NaN);
+    }
+
+    return dateOnlyPattern.test(trimmedValue) && boundary === 'to'
+        ? addUtcDays(date, 1)
+        : date;
+}
+
+const submittedDateBoundarySchema = (boundary: 'from' | 'to') =>
+    z.preprocess((value) => {
+        if (value === undefined || value === '') {
+            return undefined;
+        }
+
+        return typeof value === 'string'
+            ? parseSubmittedDateBoundary(value, boundary)
+            : value;
+    }, z.date().refine((value) => !Number.isNaN(value.getTime()), 'Invalid submitted date').optional());
 
 const idParamsSchema = z.object({
     id: z.string().uuid('Invalid feedback id'),
@@ -28,13 +87,28 @@ const submitFeedbackBodySchema = z.object({
     isAnonymous: z.boolean().optional(),
 });
 
-const listFeedbackQuerySchema = z.object({
+const listFeedbackQueryBaseSchema = z.object({
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(10),
     staffProfileId: z.string().uuid('Invalid staff profile id').optional(),
     departmentId: z.string().uuid('Invalid department id').optional(),
     status: z.enum(feedbackStatusValues).optional(),
+    patientSearch: optionalTrimmedQueryString,
+    appointmentSearch: optionalTrimmedQueryString,
+    submittedAtFrom: submittedDateBoundarySchema('from'),
+    submittedAtTo: submittedDateBoundarySchema('to'),
 });
+
+const listFeedbackQuerySchema = listFeedbackQueryBaseSchema.refine(
+    (query) =>
+        !query.submittedAtFrom ||
+        !query.submittedAtTo ||
+        query.submittedAtFrom < query.submittedAtTo,
+    {
+        message: 'Submitted date range is invalid',
+        path: ['submittedAtTo'],
+    },
+);
 
 const updateFeedbackStatusBodySchema = z.object({
     status: z.enum(feedbackStatusValues),
@@ -99,6 +173,10 @@ export class FeedbackController {
                 query.staffProfileId,
                 query.departmentId,
                 query.status as FeedbackStatus | undefined,
+                query.patientSearch,
+                query.appointmentSearch,
+                query.submittedAtFrom,
+                query.submittedAtTo,
                 req.user?.id,
                 hasPermission(req, 'feedback:read', 'all'),
             ),
@@ -108,7 +186,7 @@ export class FeedbackController {
     }
 
     async my(req: Request, res: Response) {
-        const query = listFeedbackQuerySchema
+        const query = listFeedbackQueryBaseSchema
             .pick({ page: true, limit: true })
             .parse(req.query);
         const result = await this.queryBus.execute(

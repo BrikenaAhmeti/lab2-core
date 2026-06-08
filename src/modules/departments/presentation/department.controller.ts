@@ -15,6 +15,12 @@ import { ListDepartmentsQuery } from '../application/queries/list-departments.qu
 import { DepartmentPrismaRepository } from '../infrastructure/department.prisma.repository';
 import { DepartmentService } from '../services/department.service';
 
+const dateTimeFilterSchema = z.preprocess((value) => {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'Invalid date and time').optional());
+
 const createDepartmentSchema = z.object({
     name: z
         .string()
@@ -41,19 +47,37 @@ const departmentIdParamsSchema = z.object({
     id: z.string().uuid('Invalid department id'),
 });
 
-const listDepartmentsQuerySchema = z.object({
-    page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(100).default(10),
-    search: z.string().trim().max(100).optional(),
-    isActive: z.preprocess((value) => {
-        if (value === undefined || value === '') return undefined;
-        if (value === 'true' || value === true) return true;
-        if (value === 'false' || value === false) return false;
-        return value;
-    }, z.boolean().optional()),
-    sortBy: z.enum(['name', 'sortOrder', 'createdAt', 'updatedAt']).optional(),
-    sortDirection: z.enum(['asc', 'desc']).optional(),
-});
+const listDepartmentsQuerySchema = z
+    .object({
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(10),
+        search: z.string().trim().max(100).optional(),
+        isActive: z.preprocess((value) => {
+            if (value === undefined || value === '') return undefined;
+            if (value === 'true' || value === true) return true;
+            if (value === 'false' || value === false) return false;
+            return value;
+        }, z.boolean().optional()),
+        sortBy: z.enum(['name', 'sortOrder', 'createdAt', 'updatedAt']).optional(),
+        sortDirection: z.enum(['asc', 'desc']).optional(),
+        openAt: dateTimeFilterSchema,
+        openFrom: dateTimeFilterSchema,
+        openTo: dateTimeFilterSchema,
+    })
+    .refine((query) => Boolean(query.openFrom) === Boolean(query.openTo), {
+        message: 'Open hours range requires start and end date time',
+        path: ['openTo'],
+    })
+    .refine(
+        (query) =>
+            !query.openFrom ||
+            !query.openTo ||
+            new Date(query.openTo).getTime() >= new Date(query.openFrom).getTime(),
+        {
+            message: 'Open hours range end must be after start',
+            path: ['openTo'],
+        },
+    );
 
 const updateDepartmentSchema = z
     .object({
@@ -133,6 +157,9 @@ export class DepartmentController {
             queryData.isActive,
             queryData.sortBy,
             queryData.sortDirection,
+            queryData.openAt,
+            queryData.openFrom,
+            queryData.openTo,
         );
         const result = await this.queryBus.execute(this.listDepartmentsHandler, query);
 

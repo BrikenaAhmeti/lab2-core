@@ -83,6 +83,11 @@ describe('DepartmentService', () => {
             limit: 10,
             search: '  cardio   unit ',
             isActive: true,
+            sortBy: 'createdAt',
+            sortDirection: 'desc',
+            openAt: '2026-01-05T10:30',
+            openFrom: '2026-01-06T09:00',
+            openTo: '2026-01-07T15:30',
         });
 
         expect(repository.list).toHaveBeenCalledWith({
@@ -90,6 +95,11 @@ describe('DepartmentService', () => {
             limit: 10,
             search: 'cardio unit',
             isActive: true,
+            sortBy: 'createdAt',
+            sortDirection: 'desc',
+            openAt: '2026-01-05T10:30',
+            openFrom: '2026-01-06T09:00',
+            openTo: '2026-01-07T15:30',
         });
         expect(result.items).toHaveLength(1);
     });

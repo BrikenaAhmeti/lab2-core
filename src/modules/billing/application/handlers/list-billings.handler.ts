@@ -13,6 +13,7 @@ implements QueryHandler<ListBillingsQuery, BillingListResult> {
                 page: query.page,
                 limit: query.limit,
                 patientId: query.patientId,
+                search: query.search,
                 status: query.status,
                 from: query.from,
                 to: query.to,

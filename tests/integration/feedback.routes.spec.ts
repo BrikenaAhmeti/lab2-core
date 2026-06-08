@@ -17,6 +17,7 @@ const patientUserId = '9dbd7a27-0b3c-4939-8a2f-1f20fd1ef6ee';
 const appointmentId = 'e61720ab-6446-4da3-a4bc-f642940e4a81';
 const feedbackId = '8b7610e7-5223-4c86-97f1-22817b08e54d';
 const staffProfileId = '42b2c8e0-4df7-4df1-b951-fb96b0b8cf86';
+const departmentId = '6b2d5084-453e-471d-8a51-9ad8fe1f5f8d';
 const actorUserId = '7cded68b-2455-4104-87ea-cc3b78d2aa6f';
 const now = new Date('2026-05-26T10:00:00.000Z');
 
@@ -45,7 +46,7 @@ const feedback: FeedbackView = {
     appointment: {
         id: appointmentId,
         patientId,
-        departmentId: '6b2d5084-453e-471d-8a51-9ad8fe1f5f8d',
+        departmentId,
         staffProfileId,
         status: AppointmentStatus.COMPLETED,
         scheduledAt: new Date('2026-05-25T09:00:00.000Z'),
@@ -63,7 +64,7 @@ const feedback: FeedbackView = {
             displayName: 'DR-001 - Cardiology',
         },
         department: {
-            id: '6b2d5084-453e-471d-8a51-9ad8fe1f5f8d',
+            id: departmentId,
             name: 'Cardiology',
         },
     },
@@ -141,7 +142,9 @@ describe('Feedback routes', () => {
             });
 
         const response = await request(app)
-            .get(`/api/feedback?staffProfileId=${staffProfileId}&status=pending`)
+            .get(
+                `/api/feedback?staffProfileId=${staffProfileId}&departmentId=${departmentId}&status=pending&patientSearch=Ada&appointmentSearch=Cardiology&submittedAtFrom=2026-05-01&submittedAtTo=2026-05-31`,
+            )
             .set(
                 'Authorization',
                 `Bearer ${createAccessToken(['feedback:read:all'])}`,
@@ -152,7 +155,12 @@ describe('Feedback routes', () => {
         expect(listSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 staffProfileId,
+                departmentId,
                 status: 'pending',
+                patientSearch: 'Ada',
+                appointmentSearch: 'Cardiology',
+                submittedAtFrom: new Date('2026-05-01T00:00:00.000Z'),
+                submittedAtTo: new Date('2026-06-01T00:00:00.000Z'),
             }),
         );
     });

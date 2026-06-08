@@ -1,10 +1,12 @@
-import { Router } from 'express';
+import { NextFunction, Request, Response, Router } from 'express';
 import { authMiddleware } from '../../../shared/middleware/auth.middleware';
 import { requireInternalApiKey } from '../../../shared/middleware/internal-api-key';
 import { requirePermission } from '../../../shared/middleware/require-permission';
 import { AppointmentController } from './appointment.controller';
+import { VapiToolsController } from './vapi-tools.controller';
 
 const controller = new AppointmentController();
+const vapiToolsController = new VapiToolsController();
 
 export const appointmentRoutes = Router();
 export const internalAppointmentRoutes = Router();

@@ -57,6 +57,9 @@ export class DepartmentService {
         isActive?: boolean;
         sortBy?: 'name' | 'sortOrder' | 'createdAt' | 'updatedAt';
         sortDirection?: 'asc' | 'desc';
+        openAt?: string;
+        openFrom?: string;
+        openTo?: string;
     }): Promise<DepartmentListResult> {
         return this.departmentRepository.list({
             page: filters.page,
@@ -65,6 +68,9 @@ export class DepartmentService {
             isActive: filters.isActive,
             sortBy: filters.sortBy,
             sortDirection: filters.sortDirection,
+            openAt: filters.openAt,
+            openFrom: filters.openFrom,
+            openTo: filters.openTo,
         });
     }
 

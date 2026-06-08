@@ -32,7 +32,7 @@ export class NotificationInventoryEventPublisher implements InventoryEventPublis
             return null;
         }
 
-        const link = `/admin/inventory/items/${payload.item.id}`;
+        const link = '/admin/inventory';
 
         if (type === 'InventoryCriticalShortage') {
             return {

@@ -38,6 +38,7 @@ describe('Search routes', () => {
                     userId: null,
                     firstName: 'Arta',
                     lastName: 'Krasniqi',
+                    personalNumber: '1234567890',
                     email: 'arta@example.com',
                     phone: '+38344111222',
                     dateOfBirth: '1995-04-10T00:00:00.000Z',

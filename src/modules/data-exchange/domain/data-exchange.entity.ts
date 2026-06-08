@@ -5,6 +5,7 @@ export const exportEntities = [
     'inventory-items',
     'billings',
     'audit-logs',
+    'staff',
 ] as const;
 
 export const importEntities = [

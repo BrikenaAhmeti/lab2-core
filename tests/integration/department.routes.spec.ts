@@ -107,7 +107,9 @@ describe('Department routes', () => {
             });
 
         const response = await request(app)
-            .get('/api/departments?page=2&limit=5&search=cardio&isActive=true')
+            .get(
+                '/api/departments?page=2&limit=5&search=cardio&isActive=true&sortBy=createdAt&sortDirection=desc&openAt=2026-01-05T10:30&openFrom=2026-01-06T09:00&openTo=2026-01-07T15:30',
+            )
             .set('Authorization', `Bearer ${createAccessToken(['departments:read'])}`);
 
         expect(response.status).toBe(200);
@@ -118,6 +120,11 @@ describe('Department routes', () => {
             limit: 5,
             search: 'cardio',
             isActive: true,
+            sortBy: 'createdAt',
+            sortDirection: 'desc',
+            openAt: '2026-01-05T10:30',
+            openFrom: '2026-01-06T09:00',
+            openTo: '2026-01-07T15:30',
         });
     });
 

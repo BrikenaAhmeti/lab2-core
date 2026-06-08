@@ -3,16 +3,19 @@ import { z } from 'zod';
 import { BloodType } from '../../../generated/prisma';
 import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
+import { HttpAuthAccountProvisioningClient } from '../../../shared/auth/auth-account-provisioning.client';
 import { CreatePatientCommand } from '../application/commands/create-patient.command';
 import { LinkPatientByPersonalNumberCommand } from '../application/commands/link-patient-by-personal-number.command';
 import { UpdatePatientCommand } from '../application/commands/update-patient.command';
 import { CreatePatientHandler } from '../application/handlers/create-patient.handler';
 import { GetPatientByIdHandler } from '../application/handlers/get-patient-by-id.handler';
+import { GetPatientByUserIdHandler } from '../application/handlers/get-patient-by-user-id.handler';
 import { GetPatientTimelineHandler } from '../application/handlers/get-patient-timeline.handler';
 import { LinkPatientByPersonalNumberHandler } from '../application/handlers/link-patient-by-personal-number.handler';
 import { ListPatientsHandler } from '../application/handlers/list-patients.handler';
 import { UpdatePatientHandler } from '../application/handlers/update-patient.handler';
 import { GetPatientByIdQuery } from '../application/queries/get-patient-by-id.query';
+import { GetPatientByUserIdQuery } from '../application/queries/get-patient-by-user-id.query';
 import { GetPatientTimelineQuery } from '../application/queries/get-patient-timeline.query';
 import { ListPatientsQuery } from '../application/queries/list-patients.query';
 import { PatientPrismaRepository } from '../infrastructure/patient.prisma.repository';
@@ -51,7 +54,14 @@ const createPatientSchema = z.object({
     dateOfBirth: z.coerce.date().nullable().optional(),
     gender: z.union([z.string().trim().max(40), z.null()]).optional(),
     bloodType: bloodTypeSchema.nullable().optional(),
-    personalNumber: z.union([z.string().trim().max(120), z.null()]).optional(),
+    personalNumber: z.preprocess(
+        (value) => value ?? '',
+        z
+            .string()
+            .trim()
+            .min(1, 'Personal number is required')
+            .max(120, 'Personal number must be at most 120 characters'),
+    ),
     address: z.union([z.string().trim().max(255), z.null()]).optional(),
     emergencyContact: z.union([z.string().trim().max(120), z.null()]).optional(),
     emergencyPhone: z.union([z.string().trim().max(40), z.null()]).optional(),
@@ -83,6 +93,16 @@ const linkByPersonalNumberSchema = z.object({
         .trim()
         .min(1, 'Personal number is required')
         .max(120, 'Personal number must be at most 120 characters'),
+    firstName: z.string().trim().min(1).max(100).optional(),
+    lastName: z.string().trim().min(1).max(100).optional(),
+    email: z.union([z.string().trim().email(), z.null()]).optional(),
+    phone: z.union([z.string().trim().max(40), z.null()]).optional(),
+    dateOfBirth: z.coerce.date().nullable().optional(),
+    gender: z.union([z.string().trim().max(40), z.null()]).optional(),
+});
+
+const userIdParamsSchema = z.object({
+    userId: z.string().uuid('Invalid user id'),
 });
 
 function hasPermission(req: Request, permission: string) {
@@ -101,11 +121,17 @@ function toBloodType(value?: z.infer<typeof bloodTypeSchema> | null) {
 export class PatientController {
     private readonly commandBus = new CommandBus();
     private readonly queryBus = new QueryBus();
-    private readonly service = new PatientService(new PatientPrismaRepository());
+    private readonly service = new PatientService(
+        new PatientPrismaRepository(),
+        new HttpAuthAccountProvisioningClient(),
+    );
     private readonly createPatientHandler = new CreatePatientHandler(this.service);
     private readonly updatePatientHandler = new UpdatePatientHandler(this.service);
     private readonly listPatientsHandler = new ListPatientsHandler(this.service);
     private readonly getPatientByIdHandler = new GetPatientByIdHandler(this.service);
+    private readonly getPatientByUserIdHandler = new GetPatientByUserIdHandler(
+        this.service,
+    );
     private readonly getPatientTimelineHandler = new GetPatientTimelineHandler(
         this.service,
     );
@@ -153,6 +179,16 @@ export class PatientController {
         );
         const result = await this.queryBus.execute(
             this.listPatientsHandler,
+            query,
+        );
+
+        return res.status(200).json(result);
+    }
+
+    async me(req: Request, res: Response) {
+        const query = new GetPatientByUserIdQuery(req.user!.id);
+        const result = await this.queryBus.execute(
+            this.getPatientByUserIdHandler,
             query,
         );
 
@@ -225,6 +261,12 @@ export class PatientController {
         const command = new LinkPatientByPersonalNumberCommand(
             body.userId,
             body.personalNumber,
+            body.firstName,
+            body.lastName,
+            body.email,
+            body.phone,
+            body.dateOfBirth,
+            body.gender,
         );
         const result = await this.commandBus.execute(
             this.linkPatientByPersonalNumberHandler,
@@ -232,5 +274,20 @@ export class PatientController {
         );
 
         return res.status(200).json(result);
+    }
+
+    async getInternalByUserId(req: Request, res: Response) {
+        const params = userIdParamsSchema.parse(req.params);
+        const query = new GetPatientByUserIdQuery(params.userId);
+        const patient = await this.queryBus.execute(
+            this.getPatientByUserIdHandler,
+            query,
+        );
+
+        return res.status(200).json({
+            patientId: patient.id,
+            patientProfileId: patient.id,
+            userId: patient.userId,
+        });
     }
 }

@@ -62,7 +62,15 @@ const departmentAssignmentSchema = z.object({
 
 const createStaffProfileSchema = z
     .object({
-        userId: z.string().uuid('Invalid user id'),
+        userId: z.string().uuid('Invalid user id').nullable().optional(),
+        firstName: z.string().trim().min(2).max(100).optional(),
+        lastName: z.string().trim().min(2).max(100).optional(),
+        email: z.string().trim().email().optional(),
+        username: z.string().trim().min(3).max(30).regex(/^[A-Za-z0-9._-]+$/).optional(),
+        phone: z.string().trim().max(40).optional(),
+        dateOfBirth: z.coerce.date().nullable().optional(),
+        gender: z.string().trim().max(40).optional(),
+        personalNumber: z.string().trim().max(50).optional(),
         staffPositionTypeId: z.string().uuid('Invalid staff position type id'),
         employeeCode: z
             .string()
@@ -83,6 +91,21 @@ const createStaffProfileSchema = z
     })
     .refine((body) => body.departmentIds !== undefined || body.departments !== undefined, {
         message: 'At least one department assignment is required',
+    })
+    .superRefine((body, ctx) => {
+        if (body.userId) {
+            return;
+        }
+
+        (['firstName', 'lastName', 'email'] as const).forEach((field) => {
+            if (!body[field]) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: [field],
+                    message: `${field} is required when userId is not provided`,
+                });
+            }
+        });
     });
 
 const updateStaffProfileSchema = z
@@ -207,6 +230,14 @@ export class StaffController {
             body.staffPositionTypeId,
             body.employeeCode,
             toDepartmentAssignments(body),
+            body.firstName,
+            body.lastName,
+            body.email,
+            body.username,
+            body.phone,
+            body.dateOfBirth,
+            body.gender,
+            body.personalNumber,
             body.specialization,
             body.licenseNumber,
             toEmploymentStatus(body.employmentStatus),

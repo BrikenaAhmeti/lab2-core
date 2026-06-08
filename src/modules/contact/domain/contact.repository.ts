@@ -16,6 +16,9 @@ export interface ListContactMessagesFilters {
     page: number;
     limit: number;
     status?: ContactMessageStatus;
+    search?: string;
+    createdAtFrom?: Date;
+    createdAtTo?: Date;
 }
 
 export interface UpdateContactMessageStatusData {

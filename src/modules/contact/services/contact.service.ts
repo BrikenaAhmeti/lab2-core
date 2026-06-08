@@ -2,6 +2,7 @@ import { AppError } from '../../../shared/core/errors/app-error';
 import { ContactEventPublisher } from '../domain/contact-event.publisher';
 import { ContactMessageStatus } from '../domain/contact.entity';
 import {
+    normalizeOptionalMultilineText,
     normalizeOptionalText,
     normalizeRequiredText,
 } from '../domain/contact.normalizer';
@@ -43,6 +44,14 @@ export class ContactService {
     }
 
     async listMessages(filters: ListContactMessagesFilters) {
+        if (
+            filters.createdAtFrom &&
+            filters.createdAtTo &&
+            filters.createdAtFrom >= filters.createdAtTo
+        ) {
+            throw new AppError('Received date range is invalid', 400);
+        }
+
         return this.contactRepository.listMessages(filters);
     }
 
@@ -62,15 +71,19 @@ export class ContactService {
 
         const replyNotes =
             data.replyNotes !== undefined
-                ? normalizeOptionalText(data.replyNotes)
+                ? normalizeOptionalMultilineText(data.replyNotes)
                 : undefined;
 
-        if (
-            data.status === 'replied' &&
-            !replyNotes &&
-            !existing.replyNotes
-        ) {
-            throw new AppError('Reply notes are required when marking as replied', 400);
+        if (data.status === 'replied') {
+            if (!replyNotes) {
+                throw new AppError('Reply text is required before sending a reply', 400);
+            }
+
+            await this.eventPublisher.publish('ContactMessageReplied', {
+                message: existing,
+                replyText: replyNotes,
+                actorUserId: data.actorUserId,
+            });
         }
 
         return this.contactRepository.updateMessageStatus(id, {

@@ -7,6 +7,7 @@ import {
     BillingAppointmentSource,
     BillingView,
 } from '../../src/modules/billing/domain/billing.entity';
+import { BillingEventPublisher } from '../../src/modules/billing/domain/billing-event.publisher';
 import { BillingRepository } from '../../src/modules/billing/domain/billing.repository';
 import { BillingService } from '../../src/modules/billing/services/billing.service';
 
@@ -127,6 +128,12 @@ function createRepositoryMock(): jest.Mocked<BillingRepository> {
     };
 }
 
+function createEventPublisherMock(): jest.Mocked<BillingEventPublisher> {
+    return {
+        publish: jest.fn().mockResolvedValue(undefined),
+    };
+}
+
 describe('BillingService', () => {
     it('auto-generates appointment billing with consultation, lab, and medication items', async () => {
         const repository = createRepositoryMock();
@@ -140,7 +147,8 @@ describe('BillingService', () => {
             },
         ]);
         repository.createBilling.mockResolvedValue(billing);
-        const service = new BillingService(repository, () => now);
+        const eventPublisher = createEventPublisherMock();
+        const service = new BillingService(repository, () => now, eventPublisher);
 
         const result = await service.autoGenerateFromAppointment(
             appointmentId,
@@ -178,6 +186,10 @@ describe('BillingService', () => {
                     }),
                 ],
             }),
+        );
+        expect(eventPublisher.publish).toHaveBeenCalledWith(
+            'BillingCreated',
+            expect.objectContaining({ billing, actorUserId }),
         );
     });
 
@@ -235,6 +247,55 @@ describe('BillingService', () => {
                 newAmountPaid: 40,
                 newStatus: BillingStatus.PARTIALLY_PAID,
                 billingPaidAt: null,
+            }),
+        );
+    });
+
+    it('marks the remaining billing balance as paid', async () => {
+        const repository = createRepositoryMock();
+        const partiallyPaidBilling = {
+            ...billing,
+            status: BillingStatus.PARTIALLY_PAID,
+            amountPaid: 40,
+            outstandingAmount: 60,
+        };
+        repository.findBillingById.mockResolvedValue(partiallyPaidBilling);
+        repository.recordPayment.mockResolvedValue({
+            ...partiallyPaidBilling,
+            status: BillingStatus.PAID,
+            amountPaid: 100,
+            outstandingAmount: 0,
+            paidAt: now,
+        });
+        const eventPublisher = createEventPublisherMock();
+        const service = new BillingService(repository, () => now, eventPublisher);
+
+        const result = await service.markPaid(billingId, {
+            paymentMethod: PaymentMethod.CASH,
+            referenceNumber: ' CASH-001 ',
+            actorUserId,
+        });
+
+        expect(result.status).toBe(BillingStatus.PAID);
+        expect(repository.recordPayment).toHaveBeenCalledWith(
+            billingId,
+            expect.objectContaining({
+                amount: 60,
+                paymentMethod: PaymentMethod.CASH,
+                referenceNumber: 'CASH-001',
+                newAmountPaid: 100,
+                newStatus: BillingStatus.PAID,
+                billingPaidAt: now,
+            }),
+        );
+        expect(eventPublisher.publish).toHaveBeenCalledWith(
+            'BillingPaid',
+            expect.objectContaining({
+                billing: expect.objectContaining({
+                    id: billingId,
+                    status: BillingStatus.PAID,
+                }),
+                actorUserId,
             }),
         );
     });

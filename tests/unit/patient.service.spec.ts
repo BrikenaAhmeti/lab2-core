@@ -71,6 +71,74 @@ describe('PatientService', () => {
         );
     });
 
+    it('provisions an auth account when a patient is created without a user id', async () => {
+        const repository = createRepositoryMock();
+        const authClient = {
+            provisionAccount: jest.fn().mockResolvedValue({
+                id: 'provisioned-user',
+                email: 'arta@example.com',
+                firstName: 'Arta',
+                lastName: 'Krasniqi',
+                isActive: false,
+                roles: ['Patient'],
+            }),
+        };
+        repository.findByEmail.mockResolvedValue(null);
+        repository.findByPersonalNumberHash.mockResolvedValue(null);
+        repository.create.mockResolvedValue({
+            ...patient,
+            userId: 'provisioned-user',
+        });
+        const service = new PatientService(repository, authClient);
+
+        await service.createPatient({
+            firstName: 'Arta',
+            lastName: 'Krasniqi',
+            email: ' arta@example.com ',
+            phone: '+38344111222',
+            gender: 'female',
+            personalNumber: ' 1234567890 ',
+            actorUserId: 'admin-user',
+            canCreateAll: true,
+        });
+
+        expect(authClient.provisionAccount).toHaveBeenCalledWith(
+            expect.objectContaining({
+                firstName: 'Arta',
+                lastName: 'Krasniqi',
+                email: 'arta@example.com',
+                roles: ['Patient'],
+                personalNumber: '1234567890',
+            }),
+        );
+        expect(repository.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: 'provisioned-user',
+            }),
+        );
+    });
+
+    it('requires a personal number when creating a patient', async () => {
+        const repository = createRepositoryMock();
+        const service = new PatientService(repository);
+
+        await expect(
+            service.createPatient({
+                firstName: 'Arta',
+                lastName: 'Krasniqi',
+                email: patient.email,
+                personalNumber: ' ',
+                actorUserId: 'admin-user',
+                canCreateAll: true,
+            }),
+        ).rejects.toMatchObject({
+            message: 'Personal number is required',
+            statusCode: 400,
+        });
+
+        expect(repository.create).not.toHaveBeenCalled();
+    });
+
     it('rejects duplicate email', async () => {
         const repository = createRepositoryMock();
         repository.findByEmail.mockResolvedValue(patient);
@@ -81,6 +149,7 @@ describe('PatientService', () => {
                 firstName: 'Arta',
                 lastName: 'Krasniqi',
                 email: patient.email,
+                personalNumber: '9999999999',
                 actorUserId: 'admin-user',
                 canCreateAll: true,
             }),
@@ -134,6 +203,17 @@ describe('PatientService', () => {
         expect(result.id).toBe(patient.id);
     });
 
+    it('returns the current patient profile by linked user id', async () => {
+        const repository = createRepositoryMock();
+        repository.findByUserId.mockResolvedValue(patient);
+        const service = new PatientService(repository);
+
+        const result = await service.getPatientByUserId(patient.userId as string);
+
+        expect(result.id).toBe(patient.id);
+        expect(repository.findByUserId).toHaveBeenCalledWith(patient.userId);
+    });
+
     it('blocks another patient from reading the profile', async () => {
         const repository = createRepositoryMock();
         repository.findById.mockResolvedValue(patient);
@@ -144,6 +224,56 @@ describe('PatientService', () => {
         ).rejects.toMatchObject({
             message: 'Forbidden',
             statusCode: 403,
+        });
+    });
+
+    it('blocks patient self-service updates to protected profile fields', async () => {
+        const repository = createRepositoryMock();
+        repository.findById.mockResolvedValue(patient);
+        const service = new PatientService(repository);
+
+        await expect(
+            service.updatePatient(
+                patient.id,
+                {
+                    personalNumber: '9999999999',
+                    phone: '+38344999888',
+                },
+                patient.userId as string,
+                false,
+            ),
+        ).rejects.toMatchObject({
+            message: 'Only clinic staff can update protected patient profile fields',
+            statusCode: 403,
+        });
+        expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('allows patient self-service updates to contact fields', async () => {
+        const repository = createRepositoryMock();
+        repository.findById.mockResolvedValue(patient);
+        repository.update.mockResolvedValue({
+            ...patient,
+            phone: '+38344999888',
+            address: 'Rruga C',
+        });
+        const service = new PatientService(repository);
+
+        const result = await service.updatePatient(
+            patient.id,
+            {
+                phone: ' +38344999888 ',
+                address: ' Rruga C ',
+            },
+            patient.userId as string,
+            false,
+        );
+
+        expect(result.phone).toBe('+38344999888');
+        expect(repository.update).toHaveBeenCalledWith(patient.id, {
+            actorUserId: patient.userId,
+            phone: '+38344999888',
+            address: 'Rruga C',
         });
     });
 
@@ -196,6 +326,58 @@ describe('PatientService', () => {
             userId: linkedUserId,
         });
         expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('creates a patient profile from auth handoff details when no profile matches the personal number', async () => {
+        const repository = createRepositoryMock();
+        const linkedUserId = '15e1a6c6-998a-4d47-a1de-a55859e958cc';
+        const createdPatient = {
+            ...patient,
+            id: 'f9d63ff6-32d1-4d2e-9a54-753525f92b3a',
+            userId: linkedUserId,
+            firstName: 'Auto',
+            lastName: 'Detailing',
+            email: 'autodetailingwaxon@example.com',
+            personalNumber: 'PN-NEW-1',
+        };
+        repository.findByUserId.mockResolvedValue(null);
+        repository.findByPersonalNumberHash.mockResolvedValue(null);
+        repository.findByEmail.mockResolvedValue(null);
+        repository.create.mockResolvedValue(createdPatient);
+        const service = new PatientService(repository);
+
+        const result = await service.linkByPersonalNumber(
+            linkedUserId,
+            ' PN-NEW-1 ',
+            {
+                firstName: ' Auto ',
+                lastName: ' Detailing ',
+                email: ' AUTODETAILINGWAXON@EXAMPLE.COM ',
+                phone: '+38344123456',
+                dateOfBirth: new Date('1999-01-01T00:00:00.000Z'),
+                gender: 'female',
+            },
+        );
+
+        expect(result).toEqual({
+            linked: true,
+            patientId: createdPatient.id,
+            userId: linkedUserId,
+        });
+        expect(repository.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: linkedUserId,
+                firstName: 'Auto',
+                lastName: 'Detailing',
+                email: 'autodetailingwaxon@example.com',
+                phone: '+38344123456',
+                dateOfBirth: new Date('1999-01-01T00:00:00.000Z'),
+                gender: 'female',
+                personalNumber: expect.stringMatching(/^enc:/),
+                personalNumberHash: expect.any(String),
+                actorUserId: linkedUserId,
+            }),
+        );
     });
 
     it('rejects linking a personal number already attached to another user', async () => {

@@ -100,6 +100,26 @@ export const exportColumns: Record<ExportEntity, DataExchangeColumn[]> = {
         { key: 'metadata', header: 'metadata' },
         { key: 'createdAt', header: 'createdAt' },
     ],
+    staff: [
+        { key: 'id', header: 'id' },
+        { key: 'userId', header: 'userId' },
+        { key: 'firstName', header: 'firstName' },
+        { key: 'lastName', header: 'lastName' },
+        { key: 'email', header: 'email' },
+        { key: 'phone', header: 'phone' },
+        { key: 'employeeCode', header: 'employeeCode' },
+        { key: 'positionType', header: 'positionType' },
+        { key: 'specialization', header: 'specialization' },
+        { key: 'licenseNumber', header: 'licenseNumber' },
+        { key: 'employmentStatus', header: 'employmentStatus' },
+        { key: 'hireDate', header: 'hireDate' },
+        { key: 'isPublicProfile', header: 'isPublicProfile' },
+        { key: 'departmentIds', header: 'departmentIds' },
+        { key: 'departmentNames', header: 'departmentNames' },
+        { key: 'primaryDepartment', header: 'primaryDepartment' },
+        { key: 'createdAt', header: 'createdAt' },
+        { key: 'updatedAt', header: 'updatedAt' },
+    ],
 };
 
 export const importTemplates: Record<

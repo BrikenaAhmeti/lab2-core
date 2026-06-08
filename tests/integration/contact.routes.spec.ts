@@ -126,7 +126,7 @@ describe('Contact routes', () => {
             });
 
         const response = await request(app)
-            .get('/api/contact?status=new')
+            .get('/api/contact?status=new&search=Ada&createdAtFrom=2026-05-26&createdAtTo=2026-05-26')
             .set(
                 'Authorization',
                 `Bearer ${createAccessToken(['contact:read:all'])}`,
@@ -137,8 +137,17 @@ describe('Contact routes', () => {
         expect(listSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 status: 'new',
+                search: 'Ada',
+                createdAtFrom: expect.any(Date),
+                createdAtTo: expect.any(Date),
             }),
         );
+        const filters = listSpy.mock.calls[0][0] as {
+            createdAtFrom?: Date;
+            createdAtTo?: Date;
+        };
+        expect(filters.createdAtFrom?.toISOString()).toBe('2026-05-26T00:00:00.000Z');
+        expect(filters.createdAtTo?.toISOString()).toBe('2026-05-27T00:00:00.000Z');
     });
 
     it('marks contact submissions as replied with notes', async () => {
@@ -154,6 +163,10 @@ describe('Contact routes', () => {
                 replyNotes: 'Answered by email',
                 repliedAt: now,
             });
+        const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+            ok: true,
+            json: async () => ({ success: true }),
+        } as Response);
 
         const response = await request(app)
             .patch(`/api/contact/${contactId}/status`)
@@ -168,6 +181,16 @@ describe('Contact routes', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.status).toBe('replied');
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        const [url, options] = fetchSpy.mock.calls[0];
+        expect(String(url)).toBe('http://auth.local/internal/auth/contact-reply');
+        expect(options?.method).toBe('POST');
+        expect(JSON.parse(options?.body as string)).toEqual({
+            name: 'Ada Lovelace',
+            email: 'ada@example.com',
+            subject: 'Appointment question',
+            replyText: 'Answered by email',
+        });
         expect(updateSpy).toHaveBeenCalledWith(
             contactId,
             expect.objectContaining({

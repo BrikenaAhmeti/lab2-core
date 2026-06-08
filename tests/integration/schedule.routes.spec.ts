@@ -210,14 +210,14 @@ describe('Schedule routes', () => {
             .spyOn(SchedulePrismaRepository.prototype, 'listBookedAppointments')
             .mockResolvedValue([
                 {
-                    scheduledAt: new Date('2026-05-18T09:30:00.000Z'),
-                    endAt: new Date('2026-05-18T10:00:00.000Z'),
+                    scheduledAt: new Date('2030-05-20T09:30:00.000Z'),
+                    endAt: new Date('2030-05-20T10:00:00.000Z'),
                 },
             ]);
 
         const response = await request(app)
             .get(
-                `/api/staff/${staffProfileId}/available-slots?date=2026-05-18&serviceId=${serviceId}`,
+                `/api/staff/${staffProfileId}/available-slots?date=2030-05-20&serviceId=${serviceId}`,
             )
             .set('Authorization', `Bearer ${createAccessToken(['staff:read'])}`);
 

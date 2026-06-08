@@ -83,7 +83,7 @@ describe('ContactService', () => {
                 actorUserId,
             }),
         ).rejects.toMatchObject({
-            message: 'Reply notes are required when marking as replied',
+            message: 'Reply text is required before sending a reply',
             statusCode: 400,
         });
 
@@ -109,6 +109,14 @@ describe('ContactService', () => {
         });
 
         expect(result.status).toBe('replied');
+        expect(publisher.publish).toHaveBeenCalledWith(
+            'ContactMessageReplied',
+            {
+                message: contactMessage,
+                replyText: 'Answered by email',
+                actorUserId,
+            },
+        );
         expect(repository.updateMessageStatus).toHaveBeenCalledWith(
             contactId,
             {
@@ -118,5 +126,23 @@ describe('ContactService', () => {
                 actorUserId,
             },
         );
+    });
+
+    it('does not mark replied when reply email delivery fails', async () => {
+        const repository = createRepositoryMock();
+        const publisher = createPublisherMock();
+        repository.findMessageById.mockResolvedValue(contactMessage);
+        publisher.publish.mockRejectedValue(new Error('Email failed'));
+        const service = new ContactService(repository, publisher, () => now);
+
+        await expect(
+            service.updateMessageStatus(contactId, {
+                status: 'replied',
+                replyNotes: 'Answered by email',
+                actorUserId,
+            }),
+        ).rejects.toThrow('Email failed');
+
+        expect(repository.updateMessageStatus).not.toHaveBeenCalled();
     });
 });

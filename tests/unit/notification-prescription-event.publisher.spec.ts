@@ -83,6 +83,7 @@ describe('NotificationPrescriptionEventPublisher', () => {
                 userId: patientUserId,
                 type: 'prescription.created',
                 channels: ['in_app'],
+                link: '/patient/prescriptions',
             }),
         );
     });

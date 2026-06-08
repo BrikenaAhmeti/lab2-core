@@ -40,11 +40,54 @@ function toContactMessageView(
     };
 }
 
+function textContains(value: string) {
+    return {
+        contains: value,
+        mode: 'insensitive' as const,
+    };
+}
+
+function toSearchTerms(value?: string) {
+    const search = value?.trim().replace(/\s+/g, ' ');
+
+    return search ? search.split(' ') : [];
+}
+
+function buildSenderSearchFilters(
+    terms: string[],
+): Prisma.ContactMessageWhereInput[] {
+    return terms.map((term) => ({
+        OR: [
+            {
+                name: textContains(term),
+            },
+            {
+                email: textContains(term),
+            },
+            {
+                phone: textContains(term),
+            },
+        ],
+    }));
+}
+
 function buildListWhere(filters: ListContactMessagesFilters) {
     const where: Prisma.ContactMessageWhereInput = {};
+    const andFilters = buildSenderSearchFilters(toSearchTerms(filters.search));
 
     if (filters.status) {
         where.status = filters.status;
+    }
+
+    if (filters.createdAtFrom || filters.createdAtTo) {
+        where.createdAt = {
+            gte: filters.createdAtFrom,
+            lt: filters.createdAtTo,
+        };
+    }
+
+    if (andFilters.length > 0) {
+        where.AND = andFilters;
     }
 
     return where;

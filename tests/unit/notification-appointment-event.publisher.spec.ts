@@ -85,6 +85,19 @@ describe('NotificationAppointmentEventPublisher', () => {
                 }),
             );
         }
+
+        expect(notificationClient.send).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: patientUserId,
+                link: '/patient/appointments',
+            }),
+        );
+        expect(notificationClient.send).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: staffUserId,
+                link: '/doctor/consultations/e61720ab-6446-4da3-a4bc-f642940e4a81',
+            }),
+        );
     });
 
     it('sends appointment confirmations only to the patient', async () => {
@@ -125,6 +138,30 @@ describe('NotificationAppointmentEventPublisher', () => {
                 userId: patientUserId,
                 type: 'appointment.no_show',
                 channels: ['in_app', 'email'],
+            }),
+        );
+    });
+
+    it('sends completed appointment report notifications to the patient with email enabled', async () => {
+        const { notificationClient, publisher } = createPublisher();
+
+        await publisher.publish('AppointmentCompleted', {
+            appointment: {
+                ...appointment,
+                status: AppointmentStatus.COMPLETED,
+                completedAt: new Date('2030-01-02T09:40:00.000Z'),
+            },
+            previousStatus: AppointmentStatus.IN_PROGRESS,
+        });
+
+        expect(notificationClient.send).toHaveBeenCalledTimes(1);
+        expect(notificationClient.send).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: patientUserId,
+                type: 'appointment.completed_report',
+                channels: ['in_app', 'email'],
+                recipientEmail: 'ada@medsphere.local',
+                link: '/patient/medical-records',
             }),
         );
     });

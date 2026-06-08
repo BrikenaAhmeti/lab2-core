@@ -6,5 +6,8 @@ export class ListContactMessagesQuery implements Query {
         public readonly page: number,
         public readonly limit: number,
         public readonly status?: ContactMessageStatus,
+        public readonly search?: string,
+        public readonly createdAtFrom?: Date,
+        public readonly createdAtTo?: Date,
     ) {}
 }

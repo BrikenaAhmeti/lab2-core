@@ -16,6 +16,65 @@ import { NotificationContactEventPublisher } from '../infrastructure/notificatio
 import { ContactService } from '../services/contact.service';
 
 const contactStatusValues = ['new', 'read', 'replied'] as const;
+const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+
+const optionalTrimmedQueryString = z.preprocess((value) => {
+    if (value === undefined || value === '') {
+        return undefined;
+    }
+
+    return value;
+}, z.string().trim().min(1).max(120).optional());
+
+function addUtcDays(date: Date, days: number) {
+    const next = new Date(date);
+    next.setUTCDate(next.getUTCDate() + days);
+    return next;
+}
+
+function parseDateOnly(value: string) {
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    if (
+        date.getUTCFullYear() !== year ||
+        date.getUTCMonth() !== month - 1 ||
+        date.getUTCDate() !== day
+    ) {
+        return null;
+    }
+
+    return date;
+}
+
+function parseContactDateBoundary(
+    value: string,
+    boundary: 'from' | 'to',
+) {
+    const trimmedValue = value.trim();
+    const date = dateOnlyPattern.test(trimmedValue)
+        ? parseDateOnly(trimmedValue)
+        : new Date(trimmedValue);
+
+    if (!date || Number.isNaN(date.getTime())) {
+        return new Date(Number.NaN);
+    }
+
+    return dateOnlyPattern.test(trimmedValue) && boundary === 'to'
+        ? addUtcDays(date, 1)
+        : date;
+}
+
+const contactDateBoundarySchema = (boundary: 'from' | 'to') =>
+    z.preprocess((value) => {
+        if (value === undefined || value === '') {
+            return undefined;
+        }
+
+        return typeof value === 'string'
+            ? parseContactDateBoundary(value, boundary)
+            : value;
+    }, z.date().refine((value) => !Number.isNaN(value.getTime()), 'Invalid received date').optional());
 
 const idParamsSchema = z.object({
     id: z.string().uuid('Invalid contact message id'),
@@ -29,11 +88,25 @@ const submitContactBodySchema = z.object({
     message: z.string().trim().min(1).max(5000),
 });
 
-const listContactQuerySchema = z.object({
-    page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(100).default(10),
-    status: z.enum(contactStatusValues).optional(),
-});
+const listContactQuerySchema = z
+    .object({
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(10),
+        status: z.enum(contactStatusValues).optional(),
+        search: optionalTrimmedQueryString,
+        createdAtFrom: contactDateBoundarySchema('from'),
+        createdAtTo: contactDateBoundarySchema('to'),
+    })
+    .refine(
+        (query) =>
+            !query.createdAtFrom ||
+            !query.createdAtTo ||
+            query.createdAtFrom < query.createdAtTo,
+        {
+            message: 'Received date range is invalid',
+            path: ['createdAtTo'],
+        },
+    );
 
 const updateContactStatusBodySchema = z.object({
     status: z.enum(contactStatusValues),
@@ -83,6 +156,9 @@ export class ContactController {
                 query.page,
                 query.limit,
                 query.status as ContactMessageStatus | undefined,
+                query.search,
+                query.createdAtFrom,
+                query.createdAtTo,
             ),
         );
 

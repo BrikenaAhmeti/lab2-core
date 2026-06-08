@@ -43,7 +43,7 @@ export class NotificationPrescriptionEventPublisher implements PrescriptionEvent
                 type: 'prescription.created',
                 title: 'New prescription created',
                 message: `A new prescription is available: ${medicationList(prescription)}.`,
-                link: `/patient/prescriptions/${prescription.id}`,
+                link: '/patient/prescriptions',
                 channels: ['in_app'],
             },
         ];

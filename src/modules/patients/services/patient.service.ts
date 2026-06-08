@@ -1,4 +1,5 @@
 import { BloodType } from '../../../generated/prisma';
+import type { AuthAccountProvisioningClient } from '../../../shared/auth/auth-account-provisioning.client';
 import { AppError } from '../../../shared/core/errors/app-error';
 import {
     decryptPersonalNumber,
@@ -18,7 +19,17 @@ import {
 } from '../domain/patient.repository';
 
 export class PatientService {
-    constructor(private readonly patientRepository: PatientRepository) {}
+    private readonly selfUpdateAllowedFields = new Set([
+        'phone',
+        'address',
+        'emergencyContact',
+        'emergencyPhone',
+    ]);
+
+    constructor(
+        private readonly patientRepository: PatientRepository,
+        private readonly authAccountProvisioningClient?: AuthAccountProvisioningClient,
+    ) {}
 
     async createPatient(data: CreatePatientData) {
         const userId = data.canCreateAll ? data.userId ?? null : data.actorUserId ?? null;
@@ -41,6 +52,31 @@ export class PatientService {
         }
 
         await this.ensureNoDuplicate(email, personalNumberHash);
+
+        let userId = data.userId ?? null;
+
+        if (!userId) {
+            if (!email) {
+                throw new AppError('Patient email is required to create an account', 400);
+            }
+
+            if (!this.authAccountProvisioningClient) {
+                throw new AppError('Auth account provisioning is not configured', 503);
+            }
+
+            const account = await this.authAccountProvisioningClient.provisionAccount({
+                actorUserId: data.actorUserId,
+                firstName: data.firstName,
+                lastName: data.lastName,
+                email,
+                roles: ['Patient'],
+                phone: data.phone,
+                dateOfBirth: data.dateOfBirth,
+                gender: data.gender,
+                personalNumber,
+            });
+            userId = account.id;
+        }
 
         return this.patientRepository.create({
             userId,
@@ -96,6 +132,16 @@ export class PatientService {
         return patient;
     }
 
+    async getPatientByUserId(userId: string) {
+        const patient = await this.patientRepository.findByUserId(userId);
+
+        if (!patient) {
+            throw new AppError('Patient profile not found', 404);
+        }
+
+        return patient;
+    }
+
     async updatePatient(
         id: string,
         data: UpdatePatientData,
@@ -109,6 +155,10 @@ export class PatientService {
         }
 
         this.ensureCanAccess(patient.userId, actorUserId, canUpdateAll);
+
+        if (!canUpdateAll) {
+            this.ensureSelfUpdateAllowed(data);
+        }
 
         const updateData: UpdatePatientData = {
             actorUserId: data.actorUserId ?? actorUserId,
@@ -357,16 +407,88 @@ export class PatientService {
             throw new AppError('Personal number is required', 400);
         }
 
-        const [existingUserPatient, existingPersonalNumberPatient] =
+        const email = normalizeEmail(profile?.email);
+        const [existingUserPatient, existingPersonalNumberPatient, existingEmailPatient] =
             await Promise.all([
                 this.patientRepository.findByUserId(userId),
                 this.patientRepository.findByPersonalNumberHash(personalNumberHash),
+                email ? this.patientRepository.findByEmail(email) : Promise.resolve(null),
             ]);
 
         if (!existingPersonalNumberPatient) {
+            if (existingUserPatient) {
+                return {
+                    linked: false,
+                    patientId: existingUserPatient.id,
+                    userId,
+                };
+            }
+
+            if (!profile?.firstName || !profile.lastName) {
+                return {
+                    linked: false,
+                    patientId: null,
+                    userId,
+                };
+            }
+
+            if (existingEmailPatient) {
+                if (existingEmailPatient.userId && existingEmailPatient.userId !== userId) {
+                    throw new AppError(
+                        'Patient email already linked to another user',
+                        409,
+                    );
+                }
+
+                if (
+                    existingEmailPatient.personalNumber &&
+                    existingEmailPatient.personalNumber !== personalNumber
+                ) {
+                    throw new AppError(
+                        'Patient email already registered with a different personal number',
+                        409,
+                    );
+                }
+
+                const linkedPatient = await this.patientRepository.update(
+                    existingEmailPatient.id,
+                    {
+                        userId,
+                        firstName: this.requiredText(profile.firstName, 'First name'),
+                        lastName: this.requiredText(profile.lastName, 'Last name'),
+                        email,
+                        phone: normalizeOptionalText(profile.phone),
+                        dateOfBirth: profile.dateOfBirth,
+                        gender: normalizeOptionalText(profile.gender),
+                        personalNumber: encryptPersonalNumber(personalNumber),
+                        personalNumberHash,
+                        actorUserId: userId,
+                    },
+                );
+
+                return {
+                    linked: true,
+                    patientId: linkedPatient.id,
+                    userId,
+                };
+            }
+
+            const createdPatient = await this.patientRepository.create({
+                userId,
+                firstName: this.requiredText(profile.firstName, 'First name'),
+                lastName: this.requiredText(profile.lastName, 'Last name'),
+                email,
+                phone: normalizeOptionalText(profile.phone),
+                dateOfBirth: profile.dateOfBirth,
+                gender: normalizeOptionalText(profile.gender),
+                personalNumber: encryptPersonalNumber(personalNumber),
+                personalNumberHash,
+                actorUserId: userId,
+            });
+
             return {
-                linked: false,
-                patientId: null,
+                linked: true,
+                patientId: createdPatient.id,
                 userId,
             };
         }
@@ -400,6 +522,16 @@ export class PatientService {
             existingPersonalNumberPatient.id,
             {
                 userId,
+                ...(!existingPersonalNumberPatient.email && email ? { email } : {}),
+                ...(!existingPersonalNumberPatient.phone && profile?.phone
+                    ? { phone: normalizeOptionalText(profile.phone) }
+                    : {}),
+                ...(!existingPersonalNumberPatient.dateOfBirth && profile?.dateOfBirth
+                    ? { dateOfBirth: profile.dateOfBirth }
+                    : {}),
+                ...(!existingPersonalNumberPatient.gender && profile?.gender
+                    ? { gender: normalizeOptionalText(profile.gender) }
+                    : {}),
                 actorUserId: userId,
             },
         );
@@ -452,6 +584,26 @@ export class PatientService {
         }
 
         throw new AppError('Forbidden', 403);
+    }
+
+    private ensureSelfUpdateAllowed(data: UpdatePatientData) {
+        const requestedFields = Object.entries(data)
+            .filter(
+                ([field, value]) =>
+                    !['actorUserId', 'canCreateAll'].includes(field) &&
+                    value !== undefined,
+            )
+            .map(([field]) => field);
+        const protectedFields = requestedFields.filter(
+            (field) => !this.selfUpdateAllowedFields.has(field),
+        );
+
+        if (protectedFields.length > 0) {
+            throw new AppError(
+                'Only clinic staff can update protected patient profile fields',
+                403,
+            );
+        }
     }
 
     private requiredText(value: string, fieldName: string) {

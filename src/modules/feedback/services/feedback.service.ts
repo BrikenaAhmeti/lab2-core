@@ -81,6 +81,14 @@ export class FeedbackService {
         actorUserId?: string,
         canReadAll = false,
     ) {
+        if (
+            filters.submittedAtFrom &&
+            filters.submittedAtTo &&
+            filters.submittedAtFrom >= filters.submittedAtTo
+        ) {
+            throw new AppError('Submitted date range is invalid', 400);
+        }
+
         const scopedFilters = await this.applyStaffScope(
             filters,
             actorUserId,

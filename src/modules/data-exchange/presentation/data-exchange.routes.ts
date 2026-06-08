@@ -19,6 +19,7 @@ const exportPermissions: Record<string, string[]> = {
     'inventory-items': ['inventory:read'],
     billings: ['billings:read'],
     'audit-logs': ['audit_logs:read'],
+    staff: ['staff:read'],
 };
 
 const importPermissions: Record<string, string[]> = {

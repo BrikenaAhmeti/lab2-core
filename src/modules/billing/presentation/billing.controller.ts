@@ -6,12 +6,14 @@ import {
 } from '../../../generated/prisma';
 import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
+import { MarkBillingPaidCommand } from '../application/commands/mark-billing-paid.command';
 import { RecordBillingPaymentCommand } from '../application/commands/record-billing-payment.command';
 import { UpdateBillingCommand } from '../application/commands/update-billing.command';
 import { GetBillingByIdHandler } from '../application/handlers/get-billing-by-id.handler';
 import { GetBillingPdfHandler } from '../application/handlers/get-billing-pdf.handler';
 import { GetBillingStatsHandler } from '../application/handlers/get-billing-stats.handler';
 import { ListBillingsHandler } from '../application/handlers/list-billings.handler';
+import { MarkBillingPaidHandler } from '../application/handlers/mark-billing-paid.handler';
 import { RecordBillingPaymentHandler } from '../application/handlers/record-billing-payment.handler';
 import { UpdateBillingHandler } from '../application/handlers/update-billing.handler';
 import { GetBillingByIdQuery } from '../application/queries/get-billing-by-id.query';
@@ -19,6 +21,7 @@ import { GetBillingPdfQuery } from '../application/queries/get-billing-pdf.query
 import { GetBillingStatsQuery } from '../application/queries/get-billing-stats.query';
 import { ListBillingsQuery } from '../application/queries/list-billings.query';
 import { BillingPrismaRepository } from '../infrastructure/billing.prisma.repository';
+import { NotificationBillingEventPublisher } from '../infrastructure/notification-billing-event.publisher';
 import { BillingPdfService } from '../services/billing-pdf.service';
 import { BillingService } from '../services/billing.service';
 
@@ -104,10 +107,17 @@ const recordPaymentBodySchema = z.object({
     notes: z.string().trim().max(1000).nullable().optional(),
 });
 
+const markPaidBodySchema = z.object({
+    paymentMethod: z.enum(paymentMethodValues).default('CASH'),
+    referenceNumber: z.string().trim().max(200).nullable().optional(),
+    notes: z.string().trim().max(1000).nullable().optional(),
+});
+
 const listBillingsQuerySchema = z.object({
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(10),
     patientId: z.string().uuid('Invalid patient id').optional(),
+    search: z.string().trim().max(120).optional(),
     status: z.enum(billingStatusValues).optional(),
     from: optionalDateTimeSchema,
     to: optionalDateTimeSchema,
@@ -138,7 +148,11 @@ export class BillingController {
     private readonly commandBus = new CommandBus();
     private readonly queryBus = new QueryBus();
     private readonly pdfService = new BillingPdfService();
-    private readonly service = new BillingService(new BillingPrismaRepository());
+    private readonly service = new BillingService(
+        new BillingPrismaRepository(),
+        undefined,
+        new NotificationBillingEventPublisher(),
+    );
     private readonly listBillingsHandler = new ListBillingsHandler(this.service);
     private readonly getBillingByIdHandler = new GetBillingByIdHandler(this.service);
     private readonly getBillingStatsHandler = new GetBillingStatsHandler(this.service);
@@ -150,6 +164,7 @@ export class BillingController {
     private readonly recordPaymentHandler = new RecordBillingPaymentHandler(
         this.service,
     );
+    private readonly markPaidHandler = new MarkBillingPaidHandler(this.service);
 
     async list(req: Request, res: Response) {
         const query = listBillingsQuerySchema.parse(req.query);
@@ -159,6 +174,7 @@ export class BillingController {
                 query.page,
                 query.limit,
                 query.patientId,
+                query.search,
                 query.status as BillingStatus | undefined,
                 query.from,
                 query.to,
@@ -213,6 +229,23 @@ export class BillingController {
         return res.status(201).json(result);
     }
 
+    async markPaid(req: Request, res: Response) {
+        const params = idParamsSchema.parse(req.params);
+        const body = markPaidBodySchema.parse(req.body ?? {});
+        const result = await this.commandBus.execute(
+            this.markPaidHandler,
+            new MarkBillingPaidCommand(
+                params.id,
+                body.paymentMethod as PaymentMethod,
+                body.referenceNumber,
+                body.notes,
+                req.user?.id,
+            ),
+        );
+
+        return res.status(200).json(result);
+    }
+
     async stats(req: Request, res: Response) {
         const query = statsQuerySchema.parse(req.query);
         const result = await this.queryBus.execute(
@@ -225,7 +258,7 @@ export class BillingController {
 
     async downloadPdf(req: Request, res: Response) {
         const params = idParamsSchema.parse(req.params);
-        const pdf = await this.queryBus.execute(
+        const document = await this.queryBus.execute(
             this.getBillingPdfHandler,
             new GetBillingPdfQuery(
                 params.id,
@@ -237,9 +270,9 @@ export class BillingController {
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader(
             'Content-Disposition',
-            `attachment; filename="billing-${params.id}.pdf"`,
+            `attachment; filename="${document.filename}"`,
         );
 
-        return res.status(200).send(pdf);
+        return res.status(200).send(document.pdf);
     }
 }

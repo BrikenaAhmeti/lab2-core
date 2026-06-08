@@ -6,6 +6,7 @@ process.env.NODE_ENV = 'test';
 process.env.JWT_ACCESS_SECRET = 'appointment-service-test-secret';
 process.env.FRONTEND_ORIGINS = '';
 process.env.REDIS_URL = '';
+process.env.INTERNAL_API_KEY = 'appointment-internal-test-key';
 
 const { createApp } = require('../../src/app');
 const {
@@ -114,7 +115,7 @@ function createAccessToken(permissions: string[], subject = '9dbd7a27-0b3c-4939-
         {
             sub: subject,
             email: 'admin@medsphere.local',
-            roles: ['Admin'],
+            roles,
             permissions,
         },
         process.env.JWT_ACCESS_SECRET as string,
@@ -710,6 +711,138 @@ describe('Appointment routes', () => {
         expect(AppointmentPrismaRepository.prototype.findPatientByUserId)
             .toHaveBeenCalledWith(patient.userId);
         expect(createSpy).not.toHaveBeenCalled();
+    });
+
+    it('books a public appointment without an auth token', async () => {
+        jest.spyOn(PatientPrismaRepository.prototype, 'findByPersonalNumberHash').mockResolvedValue(null);
+        jest.spyOn(PatientPrismaRepository.prototype, 'findByEmail').mockResolvedValue(null);
+        jest.spyOn(PatientPrismaRepository.prototype, 'create').mockResolvedValue(patientProfile);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById').mockResolvedValue(patient);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'countConflictingAppointments')
+            .mockResolvedValue(0);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'create').mockResolvedValue(appointment);
+        mockAvailabilityDependencies();
+
+        const response = await request(app)
+            .post('/api/public/appointments')
+            .send({
+                patient: {
+                    firstName: 'Ada',
+                    lastName: 'Lovelace',
+                    email: 'ada@medsphere.local',
+                    phone: '+38344111222',
+                    personalNumber: '1234567890',
+                    dateOfBirth: '1990-01-01',
+                    gender: 'female',
+                },
+                serviceCatalogId: serviceId,
+                staffProfileId,
+                scheduledAt: scheduledAt.toISOString(),
+                notes: 'Website request',
+            });
+
+        expect(response.status).toBe(201);
+        expect(response.body.id).toBe(appointmentId);
+        expect(PatientPrismaRepository.prototype.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                firstName: 'Ada',
+                lastName: 'Lovelace',
+                email: 'ada@medsphere.local',
+                phone: '+38344111222',
+                personalNumber: expect.stringMatching(/^enc:/),
+                personalNumberHash: expect.any(String),
+            }),
+        );
+        expect(AppointmentPrismaRepository.prototype.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                patientId,
+                serviceCatalogId: serviceId,
+                staffProfileId,
+                notes: 'Website request',
+            }),
+        );
+    });
+
+    it('returns privacy-safe AI clinical context for an internal appointment lookup', async () => {
+        jest
+            .spyOn(AppointmentAiClinicalContextService.prototype, 'getByAppointmentId')
+            .mockResolvedValue({
+                appointment: {
+                    id: appointmentId,
+                    appointmentType: 'IN_PERSON',
+                    scheduledAt,
+                    department: 'Cardiology',
+                    service: 'Initial Consultation',
+                    staffSpecialization: 'Cardiologist',
+                },
+                patient: {
+                    gender: 'female',
+                    bloodType: 'A_POSITIVE',
+                    allergies: ['penicillin'],
+                    medicalNotes: { chronicConditions: ['asthma'] },
+                },
+                recentMedicalRecords: [
+                    {
+                        createdAt: new Date('2029-12-20T10:00:00.000Z'),
+                        department: 'Cardiology',
+                        chiefComplaint: 'Chest discomfort',
+                        diagnosis: 'Stable exam',
+                        treatmentPlan: 'Monitor symptoms',
+                        followUpInstructions: 'Follow up in two weeks',
+                    },
+                ],
+                recentPrescriptions: [
+                    {
+                        issuedAt: new Date('2029-12-20T10:10:00.000Z'),
+                        status: 'ACTIVE',
+                        diagnosis: 'Stable exam',
+                        items: [
+                            {
+                                medicationName: 'Aspirin',
+                                dosage: '81 mg',
+                                frequency: 'Once daily',
+                                durationInstructions: '30 days',
+                                notes: null,
+                            },
+                        ],
+                    },
+                ],
+            });
+
+        const response = await request(app)
+            .get(`/internal/appointments/${appointmentId}/ai-clinical-context`)
+            .set('x-internal-api-key', process.env.INTERNAL_API_KEY as string);
+
+        expect(response.status).toBe(200);
+        expect(response.body.patient.allergies).toEqual(['penicillin']);
+        expect(response.body.recentPrescriptions[0].items[0].medicationName).toBe('Aspirin');
+        expect(JSON.stringify(response.body)).not.toContain('Ada');
+        expect(JSON.stringify(response.body)).not.toContain('ada@medsphere.local');
+        expect(JSON.stringify(response.body)).not.toContain('+38344111222');
     });
 
     it('books a public appointment without an auth token', async () => {

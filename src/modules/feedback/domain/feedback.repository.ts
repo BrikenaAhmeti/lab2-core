@@ -24,6 +24,10 @@ export interface ListFeedbackFilters {
     staffProfileId?: string;
     departmentId?: string;
     status?: FeedbackStatus;
+    patientSearch?: string;
+    appointmentSearch?: string;
+    submittedAtFrom?: Date;
+    submittedAtTo?: Date;
 }
 
 export interface ListPatientFeedbackFilters {

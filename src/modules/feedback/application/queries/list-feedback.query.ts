@@ -8,6 +8,10 @@ export class ListFeedbackQuery implements Query {
         public readonly staffProfileId?: string,
         public readonly departmentId?: string,
         public readonly status?: FeedbackStatus,
+        public readonly patientSearch?: string,
+        public readonly appointmentSearch?: string,
+        public readonly submittedAtFrom?: Date,
+        public readonly submittedAtTo?: Date,
         public readonly actorUserId?: string,
         public readonly canReadAll = false,
     ) {}

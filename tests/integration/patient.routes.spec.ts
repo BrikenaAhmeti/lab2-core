@@ -300,6 +300,67 @@ describe('Patient routes', () => {
         });
     });
 
+    it('creates a missing patient profile from the internal auth handoff', async () => {
+        const linkedUserId = '15e1a6c6-998a-4d47-a1de-a55859e958cc';
+        const createdPatient = {
+            ...patient,
+            id: 'f9d63ff6-32d1-4d2e-9a54-753525f92b3a',
+            userId: linkedUserId,
+            firstName: 'Auto',
+            lastName: 'Detailing',
+            email: 'autodetailingwaxon@example.com',
+            personalNumber: 'PN-NEW-1',
+        };
+        jest.spyOn(PatientPrismaRepository.prototype, 'findByUserId').mockResolvedValue(
+            null,
+        );
+        jest.spyOn(
+            PatientPrismaRepository.prototype,
+            'findByPersonalNumberHash',
+        ).mockResolvedValue(null);
+        jest.spyOn(PatientPrismaRepository.prototype, 'findByEmail').mockResolvedValue(
+            null,
+        );
+        const createSpy = jest
+            .spyOn(PatientPrismaRepository.prototype, 'create')
+            .mockResolvedValue(createdPatient);
+
+        const response = await request(app)
+            .post('/internal/patients/link-by-personal-number')
+            .set('x-internal-api-key', process.env.INTERNAL_API_KEY as string)
+            .send({
+                userId: linkedUserId,
+                personalNumber: ' PN-NEW-1 ',
+                firstName: ' Auto ',
+                lastName: ' Detailing ',
+                email: ' AUTODETAILINGWAXON@EXAMPLE.COM ',
+                phone: '+38344123456',
+                dateOfBirth: '1999-01-01',
+                gender: 'female',
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({
+            linked: true,
+            patientId: createdPatient.id,
+            userId: linkedUserId,
+        });
+        expect(createSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: linkedUserId,
+                firstName: 'Auto',
+                lastName: 'Detailing',
+                email: 'autodetailingwaxon@example.com',
+                phone: '+38344123456',
+                dateOfBirth: new Date('1999-01-01T00:00:00.000Z'),
+                gender: 'female',
+                personalNumber: expect.stringMatching(/^enc:/),
+                personalNumberHash: expect.any(String),
+                actorUserId: linkedUserId,
+            }),
+        );
+    });
+
     it('protects the internal patient linking endpoint with the internal API key', async () => {
         const response = await request(app)
             .post('/internal/patients/link-by-personal-number')

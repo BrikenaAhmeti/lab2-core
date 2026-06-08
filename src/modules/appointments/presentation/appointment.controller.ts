@@ -7,6 +7,7 @@ import {
 import { env } from '../../../config/env';
 import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
+import { AppError } from '../../../shared/core/errors/app-error';
 import { SchedulePrismaRepository } from '../../schedules/infrastructure/schedule.prisma.repository';
 import { ScheduleService } from '../../schedules/services/schedule.service';
 import { PatientPrismaRepository } from '../../patients/infrastructure/patient.prisma.repository';
@@ -179,12 +180,17 @@ function statusFromAction(action: z.infer<typeof statusActionSchema>): Appointme
     return statusByAction[action];
 }
 
+function hasScopedPermission(req: Request, permission: string, scope: string) {
+    return (req.user?.permissions ?? []).includes(`${permission}:${scope}`);
+}
+
 export class AppointmentController {
     private readonly commandBus = new CommandBus();
     private readonly queryBus = new QueryBus();
     private readonly slotLockRepository = createAppointmentSlotLockRepository();
+    private readonly appointmentRepository = new AppointmentPrismaRepository();
     private readonly service = new AppointmentService(
-        new AppointmentPrismaRepository(),
+        this.appointmentRepository,
         new ScheduleService(new SchedulePrismaRepository(), this.slotLockRepository),
         this.slotLockRepository,
         new CompositeAppointmentEventPublisher([
@@ -209,6 +215,47 @@ export class AppointmentController {
     private readonly rescheduleAppointmentHandler = new RescheduleAppointmentHandler(this.service);
     private readonly updateAppointmentStatusHandler = new UpdateAppointmentStatusHandler(this.service);
     private readonly aiClinicalContextService = new AppointmentAiClinicalContextService();
+
+    private async ensureOwnAppointmentAccess(req: Request, appointmentId: string, permission = 'appointments:update') {
+        if (hasScopedPermission(req, 'appointments:update', 'all')) {
+            return;
+        }
+
+        if (!hasScopedPermission(req, permission, 'own')) {
+            throw new AppError('Forbidden', 403);
+        }
+
+        const appointment = await this.appointmentRepository.findById(appointmentId);
+
+        if (!appointment) {
+            throw new AppError('Appointment not found', 404);
+        }
+
+        if (!req.user?.id || appointment.patient.userId !== req.user.id) {
+            throw new AppError('Forbidden', 403);
+        }
+    }
+
+    private async ensureCanUpdateStatus(req: Request, appointmentId: string, status: AppointmentStatus) {
+        if (hasScopedPermission(req, 'appointments:update', 'all')) {
+            return;
+        }
+
+        if (status !== AppointmentStatus.CANCELLED) {
+            throw new AppError('Forbidden', 403);
+        }
+
+        if (hasScopedPermission(req, 'appointments:cancel', 'all')) {
+            return;
+        }
+
+        if (hasScopedPermission(req, 'appointments:update', 'own')) {
+            await this.ensureOwnAppointmentAccess(req, appointmentId);
+            return;
+        }
+
+        await this.ensureOwnAppointmentAccess(req, appointmentId, 'appointments:cancel');
+    }
 
     async create(req: Request, res: Response) {
         const body = bookAppointmentBodySchema.parse(req.body);
@@ -305,6 +352,7 @@ export class AppointmentController {
     async reschedule(req: Request, res: Response) {
         const params = idParamsSchema.parse(req.params);
         const body = rescheduleAppointmentBodySchema.parse(req.body);
+        await this.ensureOwnAppointmentAccess(req, params.id);
         const result = await this.commandBus.execute(
             this.rescheduleAppointmentHandler,
             new RescheduleAppointmentCommand(
@@ -327,6 +375,7 @@ export class AppointmentController {
         const status = body.status
             ? (body.status as AppointmentStatus)
             : statusFromAction(body.action!);
+        await this.ensureCanUpdateStatus(req, params.id, status);
         const result = await this.commandBus.execute(
             this.updateAppointmentStatusHandler,
             new UpdateAppointmentStatusCommand(

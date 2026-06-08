@@ -298,6 +298,58 @@ describe('PatientService', () => {
         expect(repository.update).not.toHaveBeenCalled();
     });
 
+    it('creates a patient profile from auth handoff details when no profile matches the personal number', async () => {
+        const repository = createRepositoryMock();
+        const linkedUserId = '15e1a6c6-998a-4d47-a1de-a55859e958cc';
+        const createdPatient = {
+            ...patient,
+            id: 'f9d63ff6-32d1-4d2e-9a54-753525f92b3a',
+            userId: linkedUserId,
+            firstName: 'Auto',
+            lastName: 'Detailing',
+            email: 'autodetailingwaxon@example.com',
+            personalNumber: 'PN-NEW-1',
+        };
+        repository.findByUserId.mockResolvedValue(null);
+        repository.findByPersonalNumberHash.mockResolvedValue(null);
+        repository.findByEmail.mockResolvedValue(null);
+        repository.create.mockResolvedValue(createdPatient);
+        const service = new PatientService(repository);
+
+        const result = await service.linkByPersonalNumber(
+            linkedUserId,
+            ' PN-NEW-1 ',
+            {
+                firstName: ' Auto ',
+                lastName: ' Detailing ',
+                email: ' AUTODETAILINGWAXON@EXAMPLE.COM ',
+                phone: '+38344123456',
+                dateOfBirth: new Date('1999-01-01T00:00:00.000Z'),
+                gender: 'female',
+            },
+        );
+
+        expect(result).toEqual({
+            linked: true,
+            patientId: createdPatient.id,
+            userId: linkedUserId,
+        });
+        expect(repository.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: linkedUserId,
+                firstName: 'Auto',
+                lastName: 'Detailing',
+                email: 'autodetailingwaxon@example.com',
+                phone: '+38344123456',
+                dateOfBirth: new Date('1999-01-01T00:00:00.000Z'),
+                gender: 'female',
+                personalNumber: expect.stringMatching(/^enc:/),
+                personalNumberHash: expect.any(String),
+                actorUserId: linkedUserId,
+            }),
+        );
+    });
+
     it('rejects linking a personal number already attached to another user', async () => {
         const repository = createRepositoryMock();
         repository.findByUserId.mockResolvedValue(null);

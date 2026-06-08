@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { NextFunction, Request, Response, Router } from 'express';
 import { authMiddleware } from '../../../shared/middleware/auth.middleware';
 import { requireInternalApiKey } from '../../../shared/middleware/internal-api-key';
 import { requirePermission } from '../../../shared/middleware/require-permission';
@@ -11,6 +11,29 @@ const vapiToolsController = new VapiToolsController();
 export const appointmentRoutes = Router();
 export const internalAppointmentRoutes = Router();
 export const publicAppointmentRoutes = Router();
+
+function hasPermission(req: Request, permission: string) {
+    const permissions = req.user?.permissions ?? [];
+
+    return (
+        permissions.includes(permission) ||
+        permissions.some((item) => item.startsWith(`${permission}:`))
+    );
+}
+
+function requireAnyPermission(permissions: string[]) {
+    return (req: Request, res: Response, next: NextFunction) => {
+        if (!req.user) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        if (permissions.some((permission) => hasPermission(req, permission))) {
+            return next();
+        }
+
+        return res.status(403).json({ message: 'Forbidden' });
+    };
+}
 
 internalAppointmentRoutes.get(
     '/reminders',
@@ -137,7 +160,7 @@ appointmentRoutes.patch(
 appointmentRoutes.patch(
     '/:id/status',
     authMiddleware,
-    requirePermission('appointments:update'),
+    requireAnyPermission(['appointments:update', 'appointments:cancel']),
     async (req, res, next) => {
         try {
             await controller.updateStatus(req, res);

@@ -59,6 +59,7 @@ const FIXTURE_IDS = {
     pharmacyDispensingItem: '40000000-0000-4000-8000-000000000004',
     labOrderReview: '50000000-0000-4000-8000-000000000001',
     labOrderActive: '50000000-0000-4000-8000-000000000002',
+    labOrderTodayAiReview: '50000000-0000-4000-8000-000000000003',
     billingPaid: '60000000-0000-4000-8000-000000000001',
     billingPending: '60000000-0000-4000-8000-000000000002',
     billingPaidItem: '60000000-0000-4000-8000-000000000003',
@@ -1748,9 +1749,11 @@ async function seedLabOrders(
     appointments: Awaited<ReturnType<typeof seedAppointments>>,
     clinicalData: Awaited<ReturnType<typeof seedClinicalData>>,
 ) {
-    const [cbc, bmp] = await Promise.all([
+    const [cbc, bmp, hba1c, crp] = await Promise.all([
         prisma.labTest.findUniqueOrThrow({ where: { code: 'CBC' } }),
         prisma.labTest.findUniqueOrThrow({ where: { code: 'BMP' } }),
+        prisma.labTest.findUniqueOrThrow({ where: { code: 'HBA1C' } }),
+        prisma.labTest.findUniqueOrThrow({ where: { code: 'CRP' } }),
     ]);
 
     await prisma.labOrder.upsert({
@@ -1799,6 +1802,89 @@ async function seedLabOrders(
         resultStatus: LabResultStatus.ENTERED,
         isCritical: false,
         completedAt: utcAt(-1, 16, 10),
+    });
+
+    await prisma.labOrder.upsert({
+        where: { id: FIXTURE_IDS.labOrderTodayAiReview },
+        update: {
+            patientId: patients.patient.id,
+            appointmentId: appointments.completedPast.id,
+            medicalRecordId: clinicalData.recordPatient.id,
+            orderedByStaffId: staff.doctor.id,
+            departmentId: departmentsAndServices.departments.diagnostics.id,
+            status: LabOrderStatus.COMPLETED,
+            priority: 'urgent',
+            notes: 'Today demo metabolic and inflammation panel with AI interpretation.',
+            orderedAt: utcAt(0, 8, 25),
+            collectedAt: utcAt(0, 8, 45),
+            completedAt: utcAt(0, 10, 55),
+            reviewedAt: null,
+            updatedBy: ACTOR_USER_ID,
+        },
+        create: {
+            id: FIXTURE_IDS.labOrderTodayAiReview,
+            patientId: patients.patient.id,
+            appointmentId: appointments.completedPast.id,
+            medicalRecordId: clinicalData.recordPatient.id,
+            orderedByStaffId: staff.doctor.id,
+            departmentId: departmentsAndServices.departments.diagnostics.id,
+            status: LabOrderStatus.COMPLETED,
+            priority: 'urgent',
+            notes: 'Today demo metabolic and inflammation panel with AI interpretation.',
+            orderedAt: utcAt(0, 8, 25),
+            collectedAt: utcAt(0, 8, 45),
+            completedAt: utcAt(0, 10, 55),
+            createdBy: ACTOR_USER_ID,
+            updatedBy: ACTOR_USER_ID,
+        },
+    });
+
+    await upsertLabOrderItem({
+        id: '51000000-0000-4000-8000-000000000003',
+        labOrderId: FIXTURE_IDS.labOrderTodayAiReview,
+        labTestId: cbc.id,
+        resultValue: '12.8',
+        resultUnit: 'g/dL',
+        resultNotes: 'Hemoglobin within expected range.',
+        resultStatus: LabResultStatus.ENTERED,
+        isCritical: false,
+        completedAt: utcAt(0, 10, 55),
+    });
+
+    await upsertLabOrderItem({
+        id: '51000000-0000-4000-8000-000000000004',
+        labOrderId: FIXTURE_IDS.labOrderTodayAiReview,
+        labTestId: bmp.id,
+        resultValue: '156',
+        resultUnit: 'mg/dL',
+        resultNotes: 'Glucose above reference range.',
+        resultStatus: LabResultStatus.ABNORMAL,
+        isCritical: false,
+        completedAt: utcAt(0, 10, 55),
+    });
+
+    await upsertLabOrderItem({
+        id: '51000000-0000-4000-8000-000000000005',
+        labOrderId: FIXTURE_IDS.labOrderTodayAiReview,
+        labTestId: hba1c.id,
+        resultValue: '8.2',
+        resultUnit: '%',
+        resultNotes: 'Above target range for screening follow-up.',
+        resultStatus: LabResultStatus.ABNORMAL,
+        isCritical: false,
+        completedAt: utcAt(0, 10, 55),
+    });
+
+    await upsertLabOrderItem({
+        id: '51000000-0000-4000-8000-000000000006',
+        labOrderId: FIXTURE_IDS.labOrderTodayAiReview,
+        labTestId: crp.id,
+        resultValue: '22',
+        resultUnit: 'mg/L',
+        resultNotes: 'Above expected inflammation marker range.',
+        resultStatus: LabResultStatus.ABNORMAL,
+        isCritical: false,
+        completedAt: utcAt(0, 10, 55),
     });
 
     await prisma.labOrder.upsert({

@@ -461,6 +461,82 @@ describe('LabService', () => {
         expect(aiClient.queueLabInterpretation).toHaveBeenCalledTimes(1);
     });
 
+    it('includes one-sided abnormal reference ranges in manual AI payloads', async () => {
+        const repository = createRepositoryMock();
+        const eventPublisher = createEventPublisherMock();
+        const aiClient = createAiClientMock();
+        const completedOrder: LabOrderView = {
+            ...order,
+            status: LabOrderStatus.COMPLETED,
+            completedAt: new Date('2026-05-21T10:30:00.000Z'),
+            items: [
+                {
+                    ...order.items[0],
+                    resultValue: '8.2',
+                    resultUnit: '%',
+                    resultStatus: LabResultStatus.ABNORMAL,
+                    flag: 'abnormal' as const,
+                    completedAt: new Date('2026-05-21T10:00:00.000Z'),
+                    labTest: {
+                        ...order.items[0].labTest,
+                        code: 'HBA1C',
+                        name: 'Hemoglobin A1c',
+                        referenceRange: 'Below 5.7%',
+                    },
+                },
+                {
+                    ...order.items[1],
+                    resultValue: '0.1',
+                    resultUnit: 'mIU/L',
+                    resultStatus: LabResultStatus.ABNORMAL,
+                    flag: 'abnormal' as const,
+                    completedAt: new Date('2026-05-21T10:00:00.000Z'),
+                    labTest: {
+                        ...order.items[1].labTest,
+                        code: 'TSH',
+                        name: 'Thyroid Stimulating Hormone',
+                        referenceRange: 'Above 0.4 mIU/L',
+                    },
+                },
+            ],
+        };
+        repository.findLabOrderById.mockResolvedValue(completedOrder);
+        aiClient.queueLabInterpretation.mockResolvedValue({
+            labOrderId,
+            status: 'queued',
+        });
+        const service = new LabService(
+            repository,
+            eventPublisher,
+            undefined,
+            aiClient,
+        );
+
+        await service.triggerAi(labOrderId);
+
+        expect(aiClient.queueLabInterpretation).toHaveBeenCalledWith(
+            labOrderId,
+            expect.objectContaining({
+                results: expect.arrayContaining([
+                    expect.objectContaining({
+                        name: 'Hemoglobin A1c',
+                        value: 8.2,
+                        unit: '%',
+                        referenceRange: 'Below 5.7%',
+                        flag: 'high',
+                    }),
+                    expect.objectContaining({
+                        name: 'Thyroid Stimulating Hormone',
+                        value: 0.1,
+                        unit: 'mIU/L',
+                        referenceRange: 'Above 0.4 mIU/L',
+                        flag: 'low',
+                    }),
+                ]),
+            }),
+        );
+    });
+
     it('reviews a completed order and publishes a review event', async () => {
         const repository = createRepositoryMock();
         const eventPublisher = createEventPublisherMock();

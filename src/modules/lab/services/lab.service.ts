@@ -53,6 +53,37 @@ function parseResultNumber(value: string) {
     return Number.isFinite(parsed) ? parsed : null;
 }
 
+function inferOneSidedReferenceFlag(
+    referenceRange: string | null | undefined,
+    numericValue: number,
+): AiLabResultFlag | undefined {
+    if (!referenceRange) {
+        return undefined;
+    }
+
+    const threshold = parseResultNumber(referenceRange);
+
+    if (threshold === null) {
+        return undefined;
+    }
+
+    const normalized = referenceRange.toLowerCase();
+    const expectsBelow = /\b(below|under|less than)\b|</.test(normalized);
+    const expectsAbove = /\b(above|over|greater than|more than)\b|>/.test(
+        normalized,
+    );
+
+    if (expectsBelow && numericValue > threshold) {
+        return 'high';
+    }
+
+    if (expectsAbove && numericValue < threshold) {
+        return 'low';
+    }
+
+    return undefined;
+}
+
 function isPresent<T>(value: T | null | undefined): value is T {
     return value !== undefined && value !== null;
 }
@@ -598,10 +629,18 @@ export class LabService {
         }
 
         const numericValue = parseResultNumber(orderItem.resultValue);
+
+        if (numericValue === null) {
+            return undefined;
+        }
+
         const range = parseReferenceRange(orderItem.labTest.referenceRange);
 
-        if (numericValue === null || !range) {
-            return undefined;
+        if (!range) {
+            return inferOneSidedReferenceFlag(
+                orderItem.labTest.referenceRange,
+                numericValue,
+            );
         }
 
         return numericValue < range.min ? 'low' : 'high';

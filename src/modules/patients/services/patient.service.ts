@@ -402,7 +402,18 @@ export class PatientService {
         });
     }
 
-    async linkByPersonalNumber(userId: string, rawPersonalNumber: string) {
+    async linkByPersonalNumber(
+        userId: string,
+        rawPersonalNumber: string,
+        profile?: {
+            firstName?: string;
+            lastName?: string;
+            email?: string | null;
+            phone?: string | null;
+            dateOfBirth?: Date | null;
+            gender?: string | null;
+        },
+    ) {
         const personalNumber = normalizePersonalNumber(rawPersonalNumber);
         const personalNumberHash = hashPersonalNumber(personalNumber);
 
@@ -410,16 +421,88 @@ export class PatientService {
             throw new AppError('Personal number is required', 400);
         }
 
-        const [existingUserPatient, existingPersonalNumberPatient] =
+        const email = normalizeEmail(profile?.email);
+        const [existingUserPatient, existingPersonalNumberPatient, existingEmailPatient] =
             await Promise.all([
                 this.patientRepository.findByUserId(userId),
                 this.patientRepository.findByPersonalNumberHash(personalNumberHash),
+                email ? this.patientRepository.findByEmail(email) : Promise.resolve(null),
             ]);
 
         if (!existingPersonalNumberPatient) {
+            if (existingUserPatient) {
+                return {
+                    linked: false,
+                    patientId: existingUserPatient.id,
+                    userId,
+                };
+            }
+
+            if (!profile?.firstName || !profile.lastName) {
+                return {
+                    linked: false,
+                    patientId: null,
+                    userId,
+                };
+            }
+
+            if (existingEmailPatient) {
+                if (existingEmailPatient.userId && existingEmailPatient.userId !== userId) {
+                    throw new AppError(
+                        'Patient email already linked to another user',
+                        409,
+                    );
+                }
+
+                if (
+                    existingEmailPatient.personalNumber &&
+                    existingEmailPatient.personalNumber !== personalNumber
+                ) {
+                    throw new AppError(
+                        'Patient email already registered with a different personal number',
+                        409,
+                    );
+                }
+
+                const linkedPatient = await this.patientRepository.update(
+                    existingEmailPatient.id,
+                    {
+                        userId,
+                        firstName: this.requiredText(profile.firstName, 'First name'),
+                        lastName: this.requiredText(profile.lastName, 'Last name'),
+                        email,
+                        phone: normalizeOptionalText(profile.phone),
+                        dateOfBirth: profile.dateOfBirth,
+                        gender: normalizeOptionalText(profile.gender),
+                        personalNumber: encryptPersonalNumber(personalNumber),
+                        personalNumberHash,
+                        actorUserId: userId,
+                    },
+                );
+
+                return {
+                    linked: true,
+                    patientId: linkedPatient.id,
+                    userId,
+                };
+            }
+
+            const createdPatient = await this.patientRepository.create({
+                userId,
+                firstName: this.requiredText(profile.firstName, 'First name'),
+                lastName: this.requiredText(profile.lastName, 'Last name'),
+                email,
+                phone: normalizeOptionalText(profile.phone),
+                dateOfBirth: profile.dateOfBirth,
+                gender: normalizeOptionalText(profile.gender),
+                personalNumber: encryptPersonalNumber(personalNumber),
+                personalNumberHash,
+                actorUserId: userId,
+            });
+
             return {
-                linked: false,
-                patientId: null,
+                linked: true,
+                patientId: createdPatient.id,
                 userId,
             };
         }
@@ -453,6 +536,16 @@ export class PatientService {
             existingPersonalNumberPatient.id,
             {
                 userId,
+                ...(!existingPersonalNumberPatient.email && email ? { email } : {}),
+                ...(!existingPersonalNumberPatient.phone && profile?.phone
+                    ? { phone: normalizeOptionalText(profile.phone) }
+                    : {}),
+                ...(!existingPersonalNumberPatient.dateOfBirth && profile?.dateOfBirth
+                    ? { dateOfBirth: profile.dateOfBirth }
+                    : {}),
+                ...(!existingPersonalNumberPatient.gender && profile?.gender
+                    ? { gender: normalizeOptionalText(profile.gender) }
+                    : {}),
                 actorUserId: userId,
             },
         );

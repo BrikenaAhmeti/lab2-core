@@ -103,12 +103,16 @@ const patientProfile = {
     updatedAt: new Date('2026-05-19T08:00:00.000Z'),
 };
 
-function createAccessToken(permissions: string[]) {
+function createAccessToken(
+    permissions: string[],
+    sub = '9dbd7a27-0b3c-4939-8a2f-1f20fd1ef6ee',
+    roles = ['Admin'],
+) {
     return jwt.sign(
         {
-            sub: '9dbd7a27-0b3c-4939-8a2f-1f20fd1ef6ee',
+            sub,
             email: 'admin@medsphere.local',
-            roles: ['Admin'],
+            roles,
             permissions,
         },
         process.env.JWT_ACCESS_SECRET as string,
@@ -464,5 +468,137 @@ describe('Appointment routes', () => {
                 status: AppointmentStatus.CONFIRMED,
             }),
         );
+    });
+
+    it('lets a patient reschedule their own appointment with own-scoped update permission', async () => {
+        const nextScheduledAt = new Date('2030-01-02T09:30:00.000Z');
+        const nextEndAt = new Date('2030-01-02T10:00:00.000Z');
+
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findById').mockResolvedValue(appointment);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findServiceById').mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            name: 'Initial Consultation',
+            defaultDurationMinutes: 30,
+            defaultPrice: 50,
+            isActive: true,
+            department,
+        });
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffById').mockResolvedValue({
+            id: staffProfileId,
+            userId: appointment.staff!.userId,
+            employeeCode: 'DR-001',
+            specialization: 'Cardiologist',
+            employmentStatus: 'ACTIVE',
+            departments: [
+                {
+                    departmentId,
+                    unassignedAt: null,
+                    department,
+                },
+            ],
+        });
+        jest
+            .spyOn(AppointmentPrismaRepository.prototype, 'countConflictingAppointments')
+            .mockResolvedValue(0);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'reschedule').mockResolvedValue({
+            ...appointment,
+            scheduledAt: nextScheduledAt,
+            endAt: nextEndAt,
+        });
+        mockAvailabilityDependencies();
+
+        const response = await request(app)
+            .put(`/api/appointments/${appointmentId}`)
+            .set(
+                'Authorization',
+                `Bearer ${createAccessToken(['appointments:update:own'], patient.userId!, ['Patient'])}`,
+            )
+            .send({ scheduledAt: nextScheduledAt.toISOString() });
+
+        expect(response.status).toBe(200);
+        expect(response.body.scheduledAt).toBe(nextScheduledAt.toISOString());
+        expect(AppointmentPrismaRepository.prototype.reschedule).toHaveBeenCalledWith(
+            appointmentId,
+            expect.objectContaining({
+                scheduledAt: nextScheduledAt,
+                endAt: nextEndAt,
+            }),
+        );
+    });
+
+    it('blocks a patient from rescheduling another patient appointment', async () => {
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findById').mockResolvedValue(appointment);
+        const rescheduleSpy = jest.spyOn(AppointmentPrismaRepository.prototype, 'reschedule');
+
+        const response = await request(app)
+            .put(`/api/appointments/${appointmentId}`)
+            .set(
+                'Authorization',
+                `Bearer ${createAccessToken(['appointments:update:own'], 'other-patient-user', ['Patient'])}`,
+            )
+            .send({ scheduledAt: '2030-01-02T09:30:00.000Z' });
+
+        expect(response.status).toBe(403);
+        expect(rescheduleSpy).not.toHaveBeenCalled();
+    });
+
+    it('blocks own-scoped patients from non-cancel status updates', async () => {
+        const updateStatusSpy = jest.spyOn(AppointmentPrismaRepository.prototype, 'updateStatus');
+
+        const response = await request(app)
+            .patch(`/api/appointments/${appointmentId}/status`)
+            .set(
+                'Authorization',
+                `Bearer ${createAccessToken(['appointments:update:own'], patient.userId!, ['Patient'])}`,
+            )
+            .send({ action: 'confirm' });
+
+        expect(response.status).toBe(403);
+        expect(updateStatusSpy).not.toHaveBeenCalled();
+    });
+
+    it('lets a patient cancel their own appointment with own-scoped cancel permission', async () => {
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findById').mockResolvedValue(appointment);
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'updateStatus').mockResolvedValue({
+            ...appointment,
+            status: AppointmentStatus.CANCELLED,
+            cancelledAt: new Date('2030-01-01T12:00:00.000Z'),
+            cancellationNote: 'Need to move',
+        });
+
+        const response = await request(app)
+            .patch(`/api/appointments/${appointmentId}/status`)
+            .set(
+                'Authorization',
+                `Bearer ${createAccessToken(['appointments:cancel:own'], patient.userId!, ['Patient'])}`,
+            )
+            .send({ action: 'cancel', reason: 'Need to move' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe(AppointmentStatus.CANCELLED);
+        expect(AppointmentPrismaRepository.prototype.updateStatus).toHaveBeenCalledWith(
+            appointmentId,
+            expect.objectContaining({
+                status: AppointmentStatus.CANCELLED,
+                cancellationNote: 'Need to move',
+            }),
+        );
+    });
+
+    it('blocks a patient from cancelling another patient appointment', async () => {
+        jest.spyOn(AppointmentPrismaRepository.prototype, 'findById').mockResolvedValue(appointment);
+        const updateStatusSpy = jest.spyOn(AppointmentPrismaRepository.prototype, 'updateStatus');
+
+        const response = await request(app)
+            .patch(`/api/appointments/${appointmentId}/status`)
+            .set(
+                'Authorization',
+                `Bearer ${createAccessToken(['appointments:cancel:own'], 'other-patient-user', ['Patient'])}`,
+            )
+            .send({ action: 'cancel', reason: 'Need to move' });
+
+        expect(response.status).toBe(403);
+        expect(updateStatusSpy).not.toHaveBeenCalled();
     });
 });

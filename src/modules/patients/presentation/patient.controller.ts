@@ -93,6 +93,12 @@ const linkByPersonalNumberSchema = z.object({
         .trim()
         .min(1, 'Personal number is required')
         .max(120, 'Personal number must be at most 120 characters'),
+    firstName: z.string().trim().min(1).max(100).optional(),
+    lastName: z.string().trim().min(1).max(100).optional(),
+    email: z.union([z.string().trim().email(), z.null()]).optional(),
+    phone: z.union([z.string().trim().max(40), z.null()]).optional(),
+    dateOfBirth: z.coerce.date().nullable().optional(),
+    gender: z.union([z.string().trim().max(40), z.null()]).optional(),
 });
 
 const userIdParamsSchema = z.object({
@@ -254,6 +260,12 @@ export class PatientController {
         const command = new LinkPatientByPersonalNumberCommand(
             body.userId,
             body.personalNumber,
+            body.firstName,
+            body.lastName,
+            body.email,
+            body.phone,
+            body.dateOfBirth,
+            body.gender,
         );
         const result = await this.commandBus.execute(
             this.linkPatientByPersonalNumberHandler,

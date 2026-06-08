@@ -92,16 +92,27 @@ function createPublisher() {
 }
 
 describe('NotificationLabEventPublisher', () => {
-    it('sends completed lab results to the ordering doctor', async () => {
+    it('sends completed lab results to the ordering doctor and patient', async () => {
         const { notificationClient, publisher } = createPublisher();
 
         await publisher.publish('LabOrderCompleted', { order });
 
+        expect(notificationClient.send).toHaveBeenCalledTimes(2);
         expect(notificationClient.send).toHaveBeenCalledWith(
             expect.objectContaining({
                 userId: doctorUserId,
                 type: 'lab.results.completed',
                 channels: ['in_app'],
+                link: '/doctor/lab-reviews/0f79fa2f-2db3-4819-9c81-f0e51daeed51',
+            }),
+        );
+        expect(notificationClient.send).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: patientUserId,
+                type: 'lab.results.ready',
+                channels: ['in_app', 'email'],
+                recipientEmail: 'ada@medsphere.local',
+                link: '/patient/lab-results',
             }),
         );
     });
@@ -122,6 +133,7 @@ describe('NotificationLabEventPublisher', () => {
                 type: 'lab.results.reviewed',
                 channels: ['in_app', 'email'],
                 recipientEmail: 'ada@medsphere.local',
+                link: '/patient/lab-results',
             }),
         );
     });

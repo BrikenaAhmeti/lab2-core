@@ -14,12 +14,12 @@ function formatDateTime(value: Date) {
     return `${value.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
-function patientLink(appointmentId: string) {
-    return `/patient/appointments/${appointmentId}`;
+function patientLink(_appointmentId: string) {
+    return '/patient/appointments';
 }
 
-function staffLink(appointmentId: string) {
-    return `/doctor/appointments/${appointmentId}`;
+function staffLink(_appointmentId: string) {
+    return '/doctor';
 }
 
 function appointmentLabel(appointment: AppointmentView) {
@@ -97,6 +97,16 @@ export class NotificationAppointmentEventPublisher implements AppointmentEventPu
             });
         }
 
+        if (type === 'AppointmentCompleted') {
+            return this.forPatient(appointment, {
+                type: 'appointment.completed_report',
+                title: 'Consultation report ready',
+                message: `Your consultation report for ${appointmentLabel(appointment)} is ready to view in your portal.`,
+                link: '/patient/medical-records',
+                channels: ['in_app', 'email'],
+            });
+        }
+
         return [];
     }
 
@@ -132,6 +142,7 @@ export class NotificationAppointmentEventPublisher implements AppointmentEventPu
             type: string;
             title: string;
             message: string;
+            link?: string | null;
             channels: SendNotificationPayload['channels'];
         },
     ): SendNotificationPayload[] {
@@ -145,7 +156,7 @@ export class NotificationAppointmentEventPublisher implements AppointmentEventPu
                 type: input.type,
                 title: input.title,
                 message: input.message,
-                link: patientLink(appointment.id),
+                link: input.link ?? patientLink(appointment.id),
                 channels: input.channels,
                 recipientEmail: appointment.patient.email,
             },

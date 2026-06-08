@@ -21,6 +21,7 @@ import { GetBillingPdfQuery } from '../application/queries/get-billing-pdf.query
 import { GetBillingStatsQuery } from '../application/queries/get-billing-stats.query';
 import { ListBillingsQuery } from '../application/queries/list-billings.query';
 import { BillingPrismaRepository } from '../infrastructure/billing.prisma.repository';
+import { NotificationBillingEventPublisher } from '../infrastructure/notification-billing-event.publisher';
 import { BillingPdfService } from '../services/billing-pdf.service';
 import { BillingService } from '../services/billing.service';
 
@@ -147,7 +148,11 @@ export class BillingController {
     private readonly commandBus = new CommandBus();
     private readonly queryBus = new QueryBus();
     private readonly pdfService = new BillingPdfService();
-    private readonly service = new BillingService(new BillingPrismaRepository());
+    private readonly service = new BillingService(
+        new BillingPrismaRepository(),
+        undefined,
+        new NotificationBillingEventPublisher(),
+    );
     private readonly listBillingsHandler = new ListBillingsHandler(this.service);
     private readonly getBillingByIdHandler = new GetBillingByIdHandler(this.service);
     private readonly getBillingStatsHandler = new GetBillingStatsHandler(this.service);

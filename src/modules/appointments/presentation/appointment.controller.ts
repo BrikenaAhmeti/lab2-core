@@ -36,6 +36,7 @@ import { createAppointmentSlotLockRepository } from '../infrastructure/appointme
 import { BillingAppointmentEventPublisher } from '../../billing/infrastructure/billing-appointment-event.publisher';
 import { CompositeAppointmentEventPublisher } from '../infrastructure/composite-appointment-event.publisher';
 import { NotificationAppointmentEventPublisher } from '../infrastructure/notification-appointment-event.publisher';
+import { AppointmentAiClinicalContextService } from '../services/appointment-ai-clinical-context.service';
 import { AppointmentService } from '../services/appointment.service';
 
 const appointmentStatusValues = [
@@ -207,6 +208,7 @@ export class AppointmentController {
     private readonly getAppointmentByIdHandler = new GetAppointmentByIdHandler(this.service);
     private readonly rescheduleAppointmentHandler = new RescheduleAppointmentHandler(this.service);
     private readonly updateAppointmentStatusHandler = new UpdateAppointmentStatusHandler(this.service);
+    private readonly aiClinicalContextService = new AppointmentAiClinicalContextService();
 
     async create(req: Request, res: Response) {
         const body = bookAppointmentBodySchema.parse(req.body);
@@ -281,6 +283,13 @@ export class AppointmentController {
         );
 
         return res.status(200).json({ data: result });
+    }
+
+    async aiClinicalContext(req: Request, res: Response) {
+        const params = idParamsSchema.parse(req.params);
+        const result = await this.aiClinicalContextService.getByAppointmentId(params.id);
+
+        return res.status(200).json(result);
     }
 
     async getById(req: Request, res: Response) {

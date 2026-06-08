@@ -10,6 +10,7 @@ import {
     BillingStatsFilters,
     ListBillingsFilters,
 } from '../domain/billing.repository';
+import { BillingEventPublisher } from '../domain/billing-event.publisher';
 import {
     calculateLineTotal,
     normalizeOptionalText,
@@ -17,6 +18,7 @@ import {
     roundMoney,
 } from '../domain/billing.normalizer';
 import { BillingView } from '../domain/billing.entity';
+import { NoopBillingEventPublisher } from '../infrastructure/noop-billing-event.publisher';
 
 const BILLING_DUE_DAYS = 14;
 
@@ -101,6 +103,7 @@ export class BillingService {
     constructor(
         private readonly billingRepository: BillingRepository,
         private readonly nowProvider: () => Date = () => new Date(),
+        private readonly eventPublisher: BillingEventPublisher = new NoopBillingEventPublisher(),
     ) {}
 
     async autoGenerateFromAppointment(
@@ -135,7 +138,7 @@ export class BillingService {
         const totalAmount = calculateTotal(subtotal, taxAmount, discountAmount);
         const issuedAt = this.nowProvider();
 
-        return this.billingRepository.createBilling({
+        const billing = await this.billingRepository.createBilling({
             patientId: appointment.patientId,
             appointmentId: appointment.id,
             billingNumber: this.createBillingNumber(appointment.id, issuedAt),
@@ -150,6 +153,10 @@ export class BillingService {
             items,
             actorUserId,
         });
+
+        await this.publishSafely('BillingCreated', { billing, actorUserId });
+
+        return billing;
     }
 
     async listBillings(
@@ -335,7 +342,7 @@ export class BillingService {
         const newAmountPaid = roundMoney(billing.amountPaid + amount);
         const isPaid = newAmountPaid >= billing.totalAmount;
 
-        return this.billingRepository.recordPayment(billing.id, {
+        const updatedBilling = await this.billingRepository.recordPayment(billing.id, {
             amount,
             paymentMethod: data.paymentMethod,
             referenceNumber: normalizeOptionalText(data.referenceNumber),
@@ -346,6 +353,15 @@ export class BillingService {
             newStatus: isPaid ? BillingStatus.PAID : BillingStatus.PARTIALLY_PAID,
             billingPaidAt: isPaid ? paidAt : null,
         });
+
+        if (isPaid) {
+            await this.publishSafely('BillingPaid', {
+                billing: updatedBilling,
+                actorUserId: data.actorUserId,
+            });
+        }
+
+        return updatedBilling;
     }
 
     private async getExistingBilling(id: string) {
@@ -483,5 +499,16 @@ export class BillingService {
     private createBillingNumber(appointmentId: string, issuedAt: Date) {
         const date = issuedAt.toISOString().slice(0, 10).replace(/-/g, '');
         return `BILL-${date}-${appointmentId.slice(0, 8).toUpperCase()}`;
+    }
+
+    private async publishSafely(
+        type: Parameters<BillingEventPublisher['publish']>[0],
+        payload: Parameters<BillingEventPublisher['publish']>[1],
+    ) {
+        try {
+            await this.eventPublisher.publish(type, payload);
+        } catch {
+            // Notification delivery should not fail the billing workflow.
+        }
     }
 }

@@ -6,6 +6,7 @@ process.env.NODE_ENV = 'test';
 process.env.JWT_ACCESS_SECRET = 'appointment-service-test-secret';
 process.env.FRONTEND_ORIGINS = '';
 process.env.REDIS_URL = '';
+process.env.INTERNAL_API_KEY = 'appointment-internal-test-key';
 
 const { createApp } = require('../../src/app');
 const {
@@ -17,6 +18,9 @@ const {
 const {
     PatientPrismaRepository,
 } = require('../../src/modules/patients/infrastructure/patient.prisma.repository');
+const {
+    AppointmentAiClinicalContextService,
+} = require('../../src/modules/appointments/services/appointment-ai-clinical-context.service');
 
 const patientId = '35974dde-783f-43a1-bcab-117d754f81e1';
 const departmentId = '8d1dbd2c-b5c4-4d8f-b75b-e8a2dce8f30e';
@@ -211,6 +215,64 @@ describe('Appointment routes', () => {
                 notes: 'New patient',
             }),
         );
+    });
+
+    it('returns privacy-safe AI clinical context for an internal appointment lookup', async () => {
+        jest
+            .spyOn(AppointmentAiClinicalContextService.prototype, 'getByAppointmentId')
+            .mockResolvedValue({
+                appointment: {
+                    id: appointmentId,
+                    appointmentType: 'IN_PERSON',
+                    scheduledAt,
+                    department: 'Cardiology',
+                    service: 'Initial Consultation',
+                    staffSpecialization: 'Cardiologist',
+                },
+                patient: {
+                    gender: 'female',
+                    bloodType: 'A_POSITIVE',
+                    allergies: ['penicillin'],
+                    medicalNotes: { chronicConditions: ['asthma'] },
+                },
+                recentMedicalRecords: [
+                    {
+                        createdAt: new Date('2029-12-20T10:00:00.000Z'),
+                        department: 'Cardiology',
+                        chiefComplaint: 'Chest discomfort',
+                        diagnosis: 'Stable exam',
+                        treatmentPlan: 'Monitor symptoms',
+                        followUpInstructions: 'Follow up in two weeks',
+                    },
+                ],
+                recentPrescriptions: [
+                    {
+                        issuedAt: new Date('2029-12-20T10:10:00.000Z'),
+                        status: 'ACTIVE',
+                        diagnosis: 'Stable exam',
+                        items: [
+                            {
+                                medicationName: 'Aspirin',
+                                dosage: '81 mg',
+                                frequency: 'Once daily',
+                                durationInstructions: '30 days',
+                                notes: null,
+                            },
+                        ],
+                    },
+                ],
+            });
+
+        const response = await request(app)
+            .get(`/internal/appointments/${appointmentId}/ai-clinical-context`)
+            .set('x-internal-api-key', process.env.INTERNAL_API_KEY as string);
+
+        expect(response.status).toBe(200);
+        expect(response.body.patient.allergies).toEqual(['penicillin']);
+        expect(response.body.recentPrescriptions[0].items[0].medicationName).toBe('Aspirin');
+        expect(JSON.stringify(response.body)).not.toContain('Ada');
+        expect(JSON.stringify(response.body)).not.toContain('ada@medsphere.local');
+        expect(JSON.stringify(response.body)).not.toContain('+38344111222');
     });
 
     it('books a public appointment without an auth token', async () => {

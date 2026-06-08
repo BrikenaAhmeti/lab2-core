@@ -7,6 +7,7 @@ import {
     BillingAppointmentSource,
     BillingView,
 } from '../../src/modules/billing/domain/billing.entity';
+import { BillingEventPublisher } from '../../src/modules/billing/domain/billing-event.publisher';
 import { BillingRepository } from '../../src/modules/billing/domain/billing.repository';
 import { BillingService } from '../../src/modules/billing/services/billing.service';
 
@@ -127,6 +128,12 @@ function createRepositoryMock(): jest.Mocked<BillingRepository> {
     };
 }
 
+function createEventPublisherMock(): jest.Mocked<BillingEventPublisher> {
+    return {
+        publish: jest.fn().mockResolvedValue(undefined),
+    };
+}
+
 describe('BillingService', () => {
     it('auto-generates appointment billing with consultation, lab, and medication items', async () => {
         const repository = createRepositoryMock();
@@ -140,7 +147,8 @@ describe('BillingService', () => {
             },
         ]);
         repository.createBilling.mockResolvedValue(billing);
-        const service = new BillingService(repository, () => now);
+        const eventPublisher = createEventPublisherMock();
+        const service = new BillingService(repository, () => now, eventPublisher);
 
         const result = await service.autoGenerateFromAppointment(
             appointmentId,
@@ -178,6 +186,10 @@ describe('BillingService', () => {
                     }),
                 ],
             }),
+        );
+        expect(eventPublisher.publish).toHaveBeenCalledWith(
+            'BillingCreated',
+            expect.objectContaining({ billing, actorUserId }),
         );
     });
 
@@ -255,7 +267,8 @@ describe('BillingService', () => {
             outstandingAmount: 0,
             paidAt: now,
         });
-        const service = new BillingService(repository, () => now);
+        const eventPublisher = createEventPublisherMock();
+        const service = new BillingService(repository, () => now, eventPublisher);
 
         const result = await service.markPaid(billingId, {
             paymentMethod: PaymentMethod.CASH,
@@ -273,6 +286,16 @@ describe('BillingService', () => {
                 newAmountPaid: 100,
                 newStatus: BillingStatus.PAID,
                 billingPaidAt: now,
+            }),
+        );
+        expect(eventPublisher.publish).toHaveBeenCalledWith(
+            'BillingPaid',
+            expect.objectContaining({
+                billing: expect.objectContaining({
+                    id: billingId,
+                    status: BillingStatus.PAID,
+                }),
+                actorUserId,
             }),
         );
     });

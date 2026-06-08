@@ -31,15 +31,32 @@ export class NotificationLabEventPublisher implements LabEventPublisher {
         order: LabOrderView,
     ): SendNotificationPayload[] {
         if (type === 'LabOrderCompleted') {
+            const doctorNotification: SendNotificationPayload = {
+                userId: order.orderedByStaff.userId,
+                type: 'lab.results.completed',
+                title: 'Lab results ready for review',
+                message: `Lab results for ${order.patient.name} are ready for doctor review: ${orderTests(order)}.`,
+                link: `/doctor/lab-reviews/${order.id}`,
+                channels: ['in_app'],
+            };
+
+            const patientNotification: SendNotificationPayload[] = order.patient.userId
+                ? [
+                    {
+                        userId: order.patient.userId,
+                        type: 'lab.results.ready',
+                        title: 'Lab results ready',
+                        message: `Your lab results are ready to view: ${orderTests(order)}.`,
+                        link: '/patient/lab-results',
+                        channels: ['in_app', 'email'],
+                        recipientEmail: order.patient.email,
+                    },
+                ]
+                : [];
+
             return [
-                {
-                    userId: order.orderedByStaff.userId,
-                    type: 'lab.results.completed',
-                    title: 'Lab results ready for review',
-                    message: `Lab results for ${order.patient.name} are ready for doctor review: ${orderTests(order)}.`,
-                    link: `/doctor/lab-orders/${order.id}`,
-                    channels: ['in_app'],
-                },
+                doctorNotification,
+                ...patientNotification,
             ];
         }
 
@@ -48,9 +65,9 @@ export class NotificationLabEventPublisher implements LabEventPublisher {
                 {
                     userId: order.patient.userId,
                     type: 'lab.results.reviewed',
-                    title: 'Lab results ready',
-                    message: `Your lab results are ready to view: ${orderTests(order)}.`,
-                    link: `/patient/lab-results/${order.id}`,
+                    title: 'Lab results reviewed',
+                    message: `Your lab results were reviewed by your doctor: ${orderTests(order)}.`,
+                    link: '/patient/lab-results',
                     channels: ['in_app', 'email'],
                     recipientEmail: order.patient.email,
                 },

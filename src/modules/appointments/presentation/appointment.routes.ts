@@ -24,6 +24,18 @@ internalAppointmentRoutes.get(
     },
 );
 
+internalAppointmentRoutes.get(
+    '/:id/ai-clinical-context',
+    requireInternalApiKey,
+    async (req, res, next) => {
+        try {
+            await controller.aiClinicalContext(req, res);
+        } catch (error) {
+            next(error);
+        }
+    },
+);
+
 internalAppointmentRoutes.post(
     '/vapi/tools',
     requireInternalApiKey,

@@ -128,4 +128,28 @@ describe('NotificationAppointmentEventPublisher', () => {
             }),
         );
     });
+
+    it('sends completed appointment report notifications to the patient with email enabled', async () => {
+        const { notificationClient, publisher } = createPublisher();
+
+        await publisher.publish('AppointmentCompleted', {
+            appointment: {
+                ...appointment,
+                status: AppointmentStatus.COMPLETED,
+                completedAt: new Date('2030-01-02T09:40:00.000Z'),
+            },
+            previousStatus: AppointmentStatus.IN_PROGRESS,
+        });
+
+        expect(notificationClient.send).toHaveBeenCalledTimes(1);
+        expect(notificationClient.send).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: patientUserId,
+                type: 'appointment.completed_report',
+                channels: ['in_app', 'email'],
+                recipientEmail: 'ada@medsphere.local',
+                link: '/patient/medical-records',
+            }),
+        );
+    });
 });

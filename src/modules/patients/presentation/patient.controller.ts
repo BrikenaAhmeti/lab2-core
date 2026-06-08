@@ -95,6 +95,10 @@ const linkByPersonalNumberSchema = z.object({
         .max(120, 'Personal number must be at most 120 characters'),
 });
 
+const userIdParamsSchema = z.object({
+    userId: z.string().uuid('Invalid user id'),
+});
+
 function hasPermission(req: Request, permission: string) {
     const permissions = req.user?.permissions ?? [];
 
@@ -257,5 +261,20 @@ export class PatientController {
         );
 
         return res.status(200).json(result);
+    }
+
+    async getInternalByUserId(req: Request, res: Response) {
+        const params = userIdParamsSchema.parse(req.params);
+        const query = new GetPatientByUserIdQuery(params.userId);
+        const patient = await this.queryBus.execute(
+            this.getPatientByUserIdHandler,
+            query,
+        );
+
+        return res.status(200).json({
+            patientId: patient.id,
+            patientProfileId: patient.id,
+            userId: patient.userId,
+        });
     }
 }

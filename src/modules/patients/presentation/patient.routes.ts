@@ -21,6 +21,18 @@ internalPatientRoutes.post(
     },
 );
 
+internalPatientRoutes.get(
+    '/by-user/:userId',
+    requireInternalApiKey,
+    async (req, res, next) => {
+        try {
+            await controller.getInternalByUserId(req, res);
+        } catch (error) {
+            next(error);
+        }
+    },
+);
+
 patientRoutes.get(
     '/',
     authMiddleware,

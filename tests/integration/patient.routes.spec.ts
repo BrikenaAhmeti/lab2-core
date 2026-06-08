@@ -158,6 +158,33 @@ describe('Patient routes', () => {
         expect(findByUserIdSpy).toHaveBeenCalledWith(patient.userId);
     });
 
+    it('returns an internal patient profile id from the linked user id', async () => {
+        const findByUserIdSpy = jest
+            .spyOn(PatientPrismaRepository.prototype, 'findByUserId')
+            .mockResolvedValue(patient);
+
+        const response = await request(app)
+            .get(`/internal/patients/by-user/${patient.userId}`)
+            .set('x-internal-api-key', process.env.INTERNAL_API_KEY as string);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({
+            patientId: patient.id,
+            patientProfileId: patient.id,
+            userId: patient.userId,
+        });
+        expect(findByUserIdSpy).toHaveBeenCalledWith(patient.userId);
+    });
+
+    it('protects the internal patient lookup endpoint with the internal API key', async () => {
+        const response = await request(app).get(
+            `/internal/patients/by-user/${patient.userId}`,
+        );
+
+        expect(response.status).toBe(401);
+        expect(response.body.message).toBe('Invalid internal API key');
+    });
+
     it('allows staff to update a patient profile', async () => {
         jest.spyOn(PatientPrismaRepository.prototype, 'findById').mockResolvedValue(
             patient,

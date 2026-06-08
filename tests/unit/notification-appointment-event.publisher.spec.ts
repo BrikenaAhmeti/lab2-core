@@ -85,6 +85,19 @@ describe('NotificationAppointmentEventPublisher', () => {
                 }),
             );
         }
+
+        expect(notificationClient.send).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: patientUserId,
+                link: '/patient/appointments',
+            }),
+        );
+        expect(notificationClient.send).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: staffUserId,
+                link: '/doctor/consultations/e61720ab-6446-4da3-a4bc-f642940e4a81',
+            }),
+        );
     });
 
     it('sends appointment confirmations only to the patient', async () => {

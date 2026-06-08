@@ -42,6 +42,14 @@ patientRoutes.post('/', authMiddleware, async (req, res, next) => {
     }
 });
 
+patientRoutes.get('/me', authMiddleware, async (req, res, next) => {
+    try {
+        await controller.me(req, res);
+    } catch (error) {
+        next(error);
+    }
+});
+
 patientRoutes.get('/:id', authMiddleware, async (req, res, next) => {
     try {
         await controller.getById(req, res);

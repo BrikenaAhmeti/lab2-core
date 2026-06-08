@@ -173,6 +173,17 @@ describe('PatientService', () => {
         expect(result.id).toBe(patient.id);
     });
 
+    it('returns the current patient profile by linked user id', async () => {
+        const repository = createRepositoryMock();
+        repository.findByUserId.mockResolvedValue(patient);
+        const service = new PatientService(repository);
+
+        const result = await service.getPatientByUserId(patient.userId as string);
+
+        expect(result.id).toBe(patient.id);
+        expect(repository.findByUserId).toHaveBeenCalledWith(patient.userId);
+    });
+
     it('blocks another patient from reading the profile', async () => {
         const repository = createRepositoryMock();
         repository.findById.mockResolvedValue(patient);
@@ -183,6 +194,56 @@ describe('PatientService', () => {
         ).rejects.toMatchObject({
             message: 'Forbidden',
             statusCode: 403,
+        });
+    });
+
+    it('blocks patient self-service updates to protected profile fields', async () => {
+        const repository = createRepositoryMock();
+        repository.findById.mockResolvedValue(patient);
+        const service = new PatientService(repository);
+
+        await expect(
+            service.updatePatient(
+                patient.id,
+                {
+                    personalNumber: '9999999999',
+                    phone: '+38344999888',
+                },
+                patient.userId as string,
+                false,
+            ),
+        ).rejects.toMatchObject({
+            message: 'Only clinic staff can update protected patient profile fields',
+            statusCode: 403,
+        });
+        expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('allows patient self-service updates to contact fields', async () => {
+        const repository = createRepositoryMock();
+        repository.findById.mockResolvedValue(patient);
+        repository.update.mockResolvedValue({
+            ...patient,
+            phone: '+38344999888',
+            address: 'Rruga C',
+        });
+        const service = new PatientService(repository);
+
+        const result = await service.updatePatient(
+            patient.id,
+            {
+                phone: ' +38344999888 ',
+                address: ' Rruga C ',
+            },
+            patient.userId as string,
+            false,
+        );
+
+        expect(result.phone).toBe('+38344999888');
+        expect(repository.update).toHaveBeenCalledWith(patient.id, {
+            actorUserId: patient.userId,
+            phone: '+38344999888',
+            address: 'Rruga C',
         });
     });
 

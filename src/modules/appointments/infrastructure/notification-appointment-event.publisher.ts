@@ -18,8 +18,8 @@ function patientLink(_appointmentId: string) {
     return '/patient/appointments';
 }
 
-function staffLink(_appointmentId: string) {
-    return '/doctor';
+function staffLink(appointmentId: string) {
+    return `/doctor/consultations/${appointmentId}`;
 }
 
 function appointmentLabel(appointment: AppointmentView) {

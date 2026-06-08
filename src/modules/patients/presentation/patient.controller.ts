@@ -9,11 +9,13 @@ import { LinkPatientByPersonalNumberCommand } from '../application/commands/link
 import { UpdatePatientCommand } from '../application/commands/update-patient.command';
 import { CreatePatientHandler } from '../application/handlers/create-patient.handler';
 import { GetPatientByIdHandler } from '../application/handlers/get-patient-by-id.handler';
+import { GetPatientByUserIdHandler } from '../application/handlers/get-patient-by-user-id.handler';
 import { GetPatientTimelineHandler } from '../application/handlers/get-patient-timeline.handler';
 import { LinkPatientByPersonalNumberHandler } from '../application/handlers/link-patient-by-personal-number.handler';
 import { ListPatientsHandler } from '../application/handlers/list-patients.handler';
 import { UpdatePatientHandler } from '../application/handlers/update-patient.handler';
 import { GetPatientByIdQuery } from '../application/queries/get-patient-by-id.query';
+import { GetPatientByUserIdQuery } from '../application/queries/get-patient-by-user-id.query';
 import { GetPatientTimelineQuery } from '../application/queries/get-patient-timeline.query';
 import { ListPatientsQuery } from '../application/queries/list-patients.query';
 import { PatientPrismaRepository } from '../infrastructure/patient.prisma.repository';
@@ -117,6 +119,9 @@ export class PatientController {
     private readonly updatePatientHandler = new UpdatePatientHandler(this.service);
     private readonly listPatientsHandler = new ListPatientsHandler(this.service);
     private readonly getPatientByIdHandler = new GetPatientByIdHandler(this.service);
+    private readonly getPatientByUserIdHandler = new GetPatientByUserIdHandler(
+        this.service,
+    );
     private readonly getPatientTimelineHandler = new GetPatientTimelineHandler(
         this.service,
     );
@@ -163,6 +168,16 @@ export class PatientController {
         );
         const result = await this.queryBus.execute(
             this.listPatientsHandler,
+            query,
+        );
+
+        return res.status(200).json(result);
+    }
+
+    async me(req: Request, res: Response) {
+        const query = new GetPatientByUserIdQuery(req.user!.id);
+        const result = await this.queryBus.execute(
+            this.getPatientByUserIdHandler,
             query,
         );
 

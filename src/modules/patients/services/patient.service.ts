@@ -19,6 +19,13 @@ import {
 } from '../domain/patient.repository';
 
 export class PatientService {
+    private readonly selfUpdateAllowedFields = new Set([
+        'phone',
+        'address',
+        'emergencyContact',
+        'emergencyPhone',
+    ]);
+
     constructor(
         private readonly patientRepository: PatientRepository,
         private readonly authAccountProvisioningClient?: AuthAccountProvisioningClient,
@@ -128,6 +135,16 @@ export class PatientService {
         return patient;
     }
 
+    async getPatientByUserId(userId: string) {
+        const patient = await this.patientRepository.findByUserId(userId);
+
+        if (!patient) {
+            throw new AppError('Patient profile not found', 404);
+        }
+
+        return patient;
+    }
+
     async updatePatient(
         id: string,
         data: UpdatePatientData,
@@ -141,6 +158,10 @@ export class PatientService {
         }
 
         this.ensureCanAccess(patient.userId, actorUserId, canUpdateAll);
+
+        if (!canUpdateAll) {
+            this.ensureSelfUpdateAllowed(data);
+        }
 
         const updateData: UpdatePatientData = {
             actorUserId: data.actorUserId ?? actorUserId,
@@ -484,6 +505,26 @@ export class PatientService {
         }
 
         throw new AppError('Forbidden', 403);
+    }
+
+    private ensureSelfUpdateAllowed(data: UpdatePatientData) {
+        const requestedFields = Object.entries(data)
+            .filter(
+                ([field, value]) =>
+                    !['actorUserId', 'canCreateAll'].includes(field) &&
+                    value !== undefined,
+            )
+            .map(([field]) => field);
+        const protectedFields = requestedFields.filter(
+            (field) => !this.selfUpdateAllowedFields.has(field),
+        );
+
+        if (protectedFields.length > 0) {
+            throw new AppError(
+                'Only clinic staff can update protected patient profile fields',
+                403,
+            );
+        }
     }
 
     private requiredText(value: string, fieldName: string) {

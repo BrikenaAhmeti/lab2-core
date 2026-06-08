@@ -47,7 +47,7 @@ export class NotificationContactEventPublisher implements ContactEventPublisher 
             type: 'contact.submitted',
             title: 'New contact message',
             message: `${message.name} sent a contact message: ${message.subject}.`,
-            link: `/admin/contact/${message.id}`,
+            link: '/admin/contact',
             channels: ['in_app'],
         };
     }

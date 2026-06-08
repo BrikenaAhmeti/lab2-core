@@ -66,7 +66,7 @@ export class NotificationPharmacyEventPublisher implements PharmacyEventPublishe
                 type: 'pharmacy.medication.out_of_stock',
                 title: 'Medication out of stock',
                 message: `The pharmacy marked medication out of stock for your prescription: ${medications}.`,
-                link: `/patient/prescriptions/${queue.prescriptionId}`,
+                link: '/patient/prescriptions',
                 channels: ['in_app', 'email'],
                 recipientEmail: queue.patient.email,
             });
@@ -77,7 +77,7 @@ export class NotificationPharmacyEventPublisher implements PharmacyEventPublishe
             type: 'pharmacy.medication.out_of_stock',
             title: 'Medication out of stock',
             message: `${queue.patient.name}'s prescription has out-of-stock medication: ${medications}.`,
-            link: `/doctor/prescriptions/${queue.prescriptionId}`,
+            link: '/doctor',
             channels: ['in_app'],
         });
 
@@ -97,7 +97,7 @@ export class NotificationPharmacyEventPublisher implements PharmacyEventPublishe
                 type: 'pharmacy.prescription.fulfilled',
                 title: 'Prescription ready for pickup',
                 message: 'Your prescription has been fulfilled by the pharmacy.',
-                link: `/patient/prescriptions/${queue.prescriptionId}`,
+                link: '/patient/prescriptions',
                 channels: ['in_app', 'email'],
                 recipientEmail: queue.patient.email,
             },

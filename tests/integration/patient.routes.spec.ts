@@ -144,6 +144,20 @@ describe('Patient routes', () => {
         expect(response.body.id).toBe(patient.id);
     });
 
+    it('returns the current patient profile from the linked user id', async () => {
+        const findByUserIdSpy = jest
+            .spyOn(PatientPrismaRepository.prototype, 'findByUserId')
+            .mockResolvedValue(patient);
+
+        const response = await request(app)
+            .get('/api/patients/me')
+            .set('Authorization', `Bearer ${createAccessToken([], patient.userId)}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.id).toBe(patient.id);
+        expect(findByUserIdSpy).toHaveBeenCalledWith(patient.userId);
+    });
+
     it('allows staff to update a patient profile', async () => {
         jest.spyOn(PatientPrismaRepository.prototype, 'findById').mockResolvedValue(
             patient,
@@ -165,6 +179,27 @@ describe('Patient routes', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.phone).toBe('+38344999888');
+    });
+
+    it('rejects patient self-service updates to protected profile fields', async () => {
+        jest.spyOn(PatientPrismaRepository.prototype, 'findById').mockResolvedValue(
+            patient,
+        );
+        const updateSpy = jest.spyOn(PatientPrismaRepository.prototype, 'update');
+
+        const response = await request(app)
+            .put(`/api/patients/${patient.id}`)
+            .set('Authorization', `Bearer ${createAccessToken([], patient.userId)}`)
+            .send({
+                personalNumber: '9999999999',
+                phone: '+38344999888',
+            });
+
+        expect(response.status).toBe(403);
+        expect(response.body.message).toBe(
+            'Only clinic staff can update protected patient profile fields',
+        );
+        expect(updateSpy).not.toHaveBeenCalled();
     });
 
     it('returns a patient timeline', async () => {

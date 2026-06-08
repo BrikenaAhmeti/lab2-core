@@ -32,23 +32,26 @@ export class PatientService {
     ) {}
 
     async createPatient(data: CreatePatientData) {
-        const userId = data.canCreateAll ? data.userId ?? null : data.actorUserId ?? null;
         const email = normalizeEmail(data.email);
         const personalNumber = normalizePersonalNumber(data.personalNumber);
         const personalNumberHash = hashPersonalNumber(personalNumber);
 
-        if (!data.canCreateAll && !userId) {
-            throw new AppError('Forbidden', 403);
+        if (!personalNumberHash) {
+            throw new AppError('Personal number is required', 400);
         }
 
-        if (userId) {
+        if (data.userId) {
             const existingUserPatient = await this.patientRepository.findByUserId(
-                userId,
+                data.userId,
             );
 
             if (existingUserPatient) {
                 throw new AppError('Patient profile already exists for this user', 409);
             }
+        }
+
+        if (!data.canCreateAll && data.userId !== data.actorUserId) {
+            throw new AppError('Forbidden', 403);
         }
 
         await this.ensureNoDuplicate(email, personalNumberHash);
@@ -399,7 +402,18 @@ export class PatientService {
         });
     }
 
-    async linkByPersonalNumber(userId: string, rawPersonalNumber: string) {
+    async linkByPersonalNumber(
+        userId: string,
+        rawPersonalNumber: string,
+        profile?: {
+            firstName?: string;
+            lastName?: string;
+            email?: string | null;
+            phone?: string | null;
+            dateOfBirth?: Date | null;
+            gender?: string | null;
+        },
+    ) {
         const personalNumber = normalizePersonalNumber(rawPersonalNumber);
         const personalNumberHash = hashPersonalNumber(personalNumber);
 

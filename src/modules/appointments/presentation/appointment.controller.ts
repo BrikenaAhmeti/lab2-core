@@ -8,7 +8,6 @@ import { env } from '../../../config/env';
 import { AppError } from '../../../shared/core/errors/app-error';
 import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
-import { AppError } from '../../../shared/core/errors/app-error';
 import { SchedulePrismaRepository } from '../../schedules/infrastructure/schedule.prisma.repository';
 import { ScheduleService } from '../../schedules/services/schedule.service';
 import { PatientPrismaRepository } from '../../patients/infrastructure/patient.prisma.repository';
@@ -101,23 +100,6 @@ const bookAppointmentBodySchema = z.object({
     message: 'staffProfileId or doctorId is required',
 }).refine((body) => body.scheduledAt || body.date, {
     message: 'scheduledAt or date is required',
-});
-
-const publicBookAppointmentBodySchema = z.object({
-    patient: z.object({
-        firstName: z.string().trim().min(1, 'First name is required').max(100),
-        lastName: z.string().trim().min(1, 'Last name is required').max(100),
-        email: z.string().trim().email().max(320),
-        phone: z.string().trim().min(1, 'Phone number is required').max(50),
-        personalNumber: z.string().trim().min(1, 'Personal number is required').max(50),
-        dateOfBirth: dateOnlySchema,
-        gender: z.string().trim().min(1, 'Gender is required').max(50),
-    }),
-    serviceCatalogId: z.string().uuid('Invalid service id'),
-    staffProfileId: z.string().uuid('Invalid staff profile id'),
-    scheduledAt: dateTimeSchema,
-    appointmentType: z.enum(appointmentTypeValues).optional(),
-    notes: z.string().trim().max(1000).nullable().optional(),
 });
 
 const publicBookAppointmentBodySchema = z.object({
@@ -267,10 +249,6 @@ function statusFromAction(action: z.infer<typeof statusActionSchema>): Appointme
     return statusByAction[action];
 }
 
-function hasScopedPermission(req: Request, permission: string, scope: string) {
-    return (req.user?.permissions ?? []).includes(`${permission}:${scope}`);
-}
-
 export class AppointmentController {
     private readonly commandBus = new CommandBus();
     private readonly queryBus = new QueryBus();
@@ -301,48 +279,6 @@ export class AppointmentController {
     private readonly getAppointmentByIdHandler = new GetAppointmentByIdHandler(this.service);
     private readonly rescheduleAppointmentHandler = new RescheduleAppointmentHandler(this.service);
     private readonly updateAppointmentStatusHandler = new UpdateAppointmentStatusHandler(this.service);
-    private readonly aiClinicalContextService = new AppointmentAiClinicalContextService();
-
-    private async ensureOwnAppointmentAccess(req: Request, appointmentId: string, permission = 'appointments:update') {
-        if (hasScopedPermission(req, 'appointments:update', 'all')) {
-            return;
-        }
-
-        if (!hasScopedPermission(req, permission, 'own')) {
-            throw new AppError('Forbidden', 403);
-        }
-
-        const appointment = await this.appointmentRepository.findById(appointmentId);
-
-        if (!appointment) {
-            throw new AppError('Appointment not found', 404);
-        }
-
-        if (!req.user?.id || appointment.patient.userId !== req.user.id) {
-            throw new AppError('Forbidden', 403);
-        }
-    }
-
-    private async ensureCanUpdateStatus(req: Request, appointmentId: string, status: AppointmentStatus) {
-        if (hasScopedPermission(req, 'appointments:update', 'all')) {
-            return;
-        }
-
-        if (status !== AppointmentStatus.CANCELLED) {
-            throw new AppError('Forbidden', 403);
-        }
-
-        if (hasScopedPermission(req, 'appointments:cancel', 'all')) {
-            return;
-        }
-
-        if (hasScopedPermission(req, 'appointments:update', 'own')) {
-            await this.ensureOwnAppointmentAccess(req, appointmentId);
-            return;
-        }
-
-        await this.ensureOwnAppointmentAccess(req, appointmentId, 'appointments:cancel');
-    }
 
     async create(req: Request, res: Response) {
         const body = bookAppointmentBodySchema.parse(req.body);
@@ -407,23 +343,6 @@ export class AppointmentController {
         return res.status(201).json(result);
     }
 
-    async publicCreate(req: Request, res: Response) {
-        const body = publicBookAppointmentBodySchema.parse(req.body);
-        const result = await this.commandBus.execute(
-            this.bookPublicAppointmentHandler,
-            new BookPublicAppointmentCommand(
-                body.patient,
-                body.serviceCatalogId,
-                body.staffProfileId,
-                body.scheduledAt,
-                body.appointmentType as AppointmentType | undefined,
-                body.notes,
-            ),
-        );
-
-        return res.status(201).json(result);
-    }
-
     async list(req: Request, res: Response) {
         const query = listAppointmentsQuerySchema.parse(req.query);
         const result = await this.queryBus.execute(
@@ -462,13 +381,6 @@ export class AppointmentController {
         );
 
         return res.status(200).json({ data: result });
-    }
-
-    async aiClinicalContext(req: Request, res: Response) {
-        const params = idParamsSchema.parse(req.params);
-        const result = await this.aiClinicalContextService.getByAppointmentId(params.id);
-
-        return res.status(200).json(result);
     }
 
     async getById(req: Request, res: Response) {

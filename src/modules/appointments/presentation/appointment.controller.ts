@@ -135,8 +135,11 @@ const rescheduleAppointmentBodySchema = z.object({
 });
 
 const patientRescheduleBodySchema = z.object({
-    doctorId: z.string().uuid('Invalid doctor id'),
+    doctorId: z.string().uuid('Invalid doctor id').optional(),
+    staffProfileId: z.string().uuid('Invalid staff profile id').optional(),
     date: dateTimeSchema,
+}).refine((body) => body.doctorId || body.staffProfileId, {
+    message: 'doctorId or staffProfileId is required',
 });
 
 const statusActionSchema = z.enum([
@@ -472,7 +475,9 @@ export class AppointmentController {
             throw new AppError('Finalized appointments cannot be rescheduled', 422);
         }
 
-        const staff = await this.appointmentRepository.findStaffByIdOrUserId(body.doctorId);
+        const staff = await this.appointmentRepository.findStaffByIdOrUserId(
+            body.staffProfileId ?? body.doctorId!,
+        );
 
         if (!staff) {
             throw new AppError('Staff profile not found or inactive', 404);

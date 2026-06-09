@@ -248,6 +248,37 @@ describe('AppointmentService', () => {
         expect(result.id).toBe(appointmentId);
     });
 
+    it('normalizes mobile local clock appointment times before booking', async () => {
+        const { service, repository, scheduleService } = createService();
+        const mobileLocalInstant = new Date('2030-06-03T10:30:00.000Z');
+        const normalizedScheduledAt = new Date('2030-06-03T12:30:00.000Z');
+        const normalizedEndAt = new Date('2030-06-03T13:00:00.000Z');
+
+        scheduleService.isSlotWithinSchedule
+            .mockResolvedValueOnce(false)
+            .mockResolvedValueOnce(true);
+
+        await service.bookAppointment({
+            patientId,
+            serviceCatalogId: serviceId,
+            staffProfileId,
+            scheduledAt: mobileLocalInstant,
+        });
+
+        expect(scheduleService.isSlotWithinSchedule).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                scheduledAt: normalizedScheduledAt,
+                endAt: normalizedEndAt,
+            }),
+        );
+        expect(repository.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                scheduledAt: normalizedScheduledAt,
+                endAt: normalizedEndAt,
+            }),
+        );
+    });
+
     it('rejects a slot that is already Redis-locked', async () => {
         const { service, repository, lockRepository } = createService();
         lockRepository.acquireSlotLock.mockResolvedValue(false);

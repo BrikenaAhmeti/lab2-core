@@ -2,7 +2,10 @@ import { randomUUID } from 'crypto';
 import { AppointmentStatus, AppointmentType } from '../../../generated/prisma';
 import { AppError } from '../../../shared/core/errors/app-error';
 import { ScheduleService } from '../../schedules/services/schedule.service';
-import { isFutureScheduleClockDate } from '../../schedules/domain/schedule-time';
+import {
+    isFutureScheduleClockDate,
+    toScheduleClockDate,
+} from '../../schedules/domain/schedule-time';
 import {
     AppointmentTimeRange,
     AppointmentView,
@@ -51,6 +54,12 @@ const NON_RESCHEDULABLE_STATUSES = new Set<AppointmentStatus>([
 
 function addMinutes(date: Date, minutes: number) {
     return new Date(date.getTime() + minutes * 60 * 1000);
+}
+
+function normalizeSlotDate(date: Date) {
+    const normalized = new Date(date);
+    normalized.setUTCSeconds(0, 0);
+    return normalized;
 }
 
 function toDateOnly(date: Date) {
@@ -103,12 +112,10 @@ export class AppointmentService {
         const service = await this.getActiveService(data.serviceCatalogId);
         await this.ensureStaffCanServeDepartment(data.staffProfileId, service.departmentId);
 
-        const range = this.buildAppointmentRange(data.scheduledAt);
-        await this.ensureSlotIsAvailable({
+        const range = await this.resolveAvailableAppointmentRange({
             staffProfileId: data.staffProfileId,
             serviceCatalogId: data.serviceCatalogId,
-            scheduledAt: range.scheduledAt,
-            endAt: range.endAt,
+            scheduledAt: data.scheduledAt,
         });
 
         const lockToken = randomUUID();
@@ -228,12 +235,10 @@ export class AppointmentService {
         const service = await this.getActiveService(serviceId);
         await this.ensureStaffCanServeDepartment(staffProfileId, service.departmentId);
 
-        const range = this.buildAppointmentRange(data.scheduledAt);
-        await this.ensureSlotIsAvailable({
+        const range = await this.resolveAvailableAppointmentRange({
             staffProfileId,
             serviceCatalogId: service.id,
-            scheduledAt: range.scheduledAt,
-            endAt: range.endAt,
+            scheduledAt: data.scheduledAt,
         });
 
         const lockToken = randomUUID();
@@ -387,22 +392,37 @@ export class AppointmentService {
         }
     }
 
-    private async ensureSlotIsAvailable(input: {
+    private async resolveAvailableAppointmentRange(input: {
         staffProfileId: string;
         serviceCatalogId: string;
         scheduledAt: Date;
-        endAt: Date;
-    }) {
-        const isAvailable = await this.scheduleService.isSlotWithinSchedule({
-            staffProfileId: input.staffProfileId,
-            serviceId: input.serviceCatalogId,
-            scheduledAt: input.scheduledAt,
-            endAt: input.endAt,
-        });
+    }): Promise<AppointmentTimeRange> {
+        const candidates = [
+            normalizeSlotDate(input.scheduledAt),
+            normalizeSlotDate(toScheduleClockDate(input.scheduledAt)),
+        ];
+        const seen = new Set<string>();
 
-        if (!isAvailable) {
-            throw new AppError('Appointment slot is not available', 409);
+        for (const scheduledAt of candidates) {
+            const key = scheduledAt.toISOString();
+
+            if (seen.has(key)) continue;
+            seen.add(key);
+
+            const range = this.buildAppointmentRange(scheduledAt);
+            const isAvailable = await this.scheduleService.isSlotWithinSchedule({
+                staffProfileId: input.staffProfileId,
+                serviceId: input.serviceCatalogId,
+                scheduledAt: range.scheduledAt,
+                endAt: range.endAt,
+            });
+
+            if (isAvailable) {
+                return range;
+            }
         }
+
+        throw new AppError('Appointment slot is not available', 409);
     }
 
     private async ensureNoAppointmentConflict(input: {

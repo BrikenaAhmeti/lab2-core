@@ -13,7 +13,6 @@ import { SlotLockRepository } from '../domain/slot-lock.repository';
 import {
     AvailabilityWindow,
     addDays,
-    buildAvailabilityWindows,
     dateOnlyToUtcDate,
     generateAvailableSlots,
     parseTimeToMinutes,
@@ -26,6 +25,11 @@ const DEFAULT_SCHEDULE_SLOT_DURATION_MINUTES = 30;
 
 function toDateOnly(date: Date) {
     return date.toISOString().slice(0, 10);
+}
+
+function isWeekend(date: Date) {
+    const day = date.getUTCDay();
+    return day === 0 || day === 6;
 }
 
 export interface WeeklyScheduleDayInput {
@@ -187,33 +191,7 @@ export class ScheduleService {
         }
 
         const date = dateOnlyToUtcDate(params.date);
-        const [schedules, weeklySchedules] = await Promise.all([
-            this.scheduleRepository.listSchedulesForDay({
-                staffProfileId: params.staffProfileId,
-                dayOfWeek: date.getUTCDay(),
-            }),
-            this.scheduleRepository.listWeeklySchedules(params.staffProfileId),
-        ]);
-        const schedulesForServiceDepartment = schedules.filter(
-            (schedule) => schedule.departmentId === service.departmentId,
-        );
-        const exceptions = await this.scheduleRepository.listExceptionsForDate({
-            staffProfileId: params.staffProfileId,
-            departmentId: service.departmentId,
-            date,
-        });
-        const windows = buildAvailabilityWindows(
-            schedulesForServiceDepartment,
-            exceptions,
-            date,
-        );
-        const hasAnySavedSchedule = weeklySchedules.some((schedule) =>
-            this.isUsableSavedSchedule(schedule),
-        );
-        const availabilityWindows =
-            windows.length > 0 || hasAnySavedSchedule
-                ? windows
-                : this.buildDefaultAvailabilityWindows(exceptions);
+        const availabilityWindows = this.buildDefaultAvailabilityWindows(date);
 
         if (availabilityWindows.length === 0) {
             return {
@@ -236,7 +214,7 @@ export class ScheduleService {
             date: params.date,
             windows: availabilityWindows,
             serviceDurationMinutes: DEFAULT_SCHEDULE_SLOT_DURATION_MINUTES,
-            unavailableExceptions: exceptions,
+            unavailableExceptions: [],
             bookedAppointments: [],
             lockedSlots: [],
         }).filter((slot) =>
@@ -246,7 +224,7 @@ export class ScheduleService {
             date: params.date,
             windows: availabilityWindows,
             serviceDurationMinutes: DEFAULT_SCHEDULE_SLOT_DURATION_MINUTES,
-            unavailableExceptions: exceptions,
+            unavailableExceptions: [],
             bookedAppointments,
             lockedSlots,
         }).filter((slot) =>
@@ -414,31 +392,8 @@ export class ScheduleService {
         }
     }
 
-    private buildDefaultAvailabilityWindows(
-        exceptions: ScheduleExceptionEntity[],
-    ): AvailabilityWindow[] {
-        const wholeDayUnavailable = exceptions.some(
-            (exception) =>
-                exception.isUnavailable &&
-                exception.startTime === null &&
-                exception.endTime === null,
-        );
-
-        if (wholeDayUnavailable) {
-            return [];
-        }
-
-        const specialHours = exceptions.filter(
-            (exception) => !exception.isUnavailable && exception.startTime && exception.endTime,
-        );
-
-        if (specialHours.length > 0) {
-            return specialHours.map((exception) => ({
-                startMinutes: parseTimeToMinutes(exception.startTime!)!,
-                endMinutes: parseTimeToMinutes(exception.endTime!)!,
-                slotDurationMinutes: DEFAULT_SCHEDULE_SLOT_DURATION_MINUTES,
-            }));
-        }
+    private buildDefaultAvailabilityWindows(date: Date): AvailabilityWindow[] {
+        if (isWeekend(date)) return [];
 
         return [
             {
@@ -447,24 +402,6 @@ export class ScheduleService {
                 slotDurationMinutes: DEFAULT_SCHEDULE_SLOT_DURATION_MINUTES,
             },
         ];
-    }
-
-    private isUsableSavedSchedule(schedule: {
-        isActive: boolean;
-        startTime: string;
-        endTime: string;
-        slotDurationMinutes: number;
-    }) {
-        const startMinutes = parseTimeToMinutes(schedule.startTime);
-        const endMinutes = parseTimeToMinutes(schedule.endTime);
-
-        return (
-            schedule.isActive &&
-            startMinutes !== null &&
-            endMinutes !== null &&
-            startMinutes < endMinutes &&
-            schedule.slotDurationMinutes > 0
-        );
     }
 
     private async getAvailableSlotsIgnoringBookedSlots(params: {
@@ -487,33 +424,7 @@ export class ScheduleService {
         }
 
         const date = dateOnlyToUtcDate(params.date);
-        const [schedules, weeklySchedules] = await Promise.all([
-            this.scheduleRepository.listSchedulesForDay({
-                staffProfileId: params.staffProfileId,
-                dayOfWeek: date.getUTCDay(),
-            }),
-            this.scheduleRepository.listWeeklySchedules(params.staffProfileId),
-        ]);
-        const schedulesForServiceDepartment = schedules.filter(
-            (schedule) => schedule.departmentId === service.departmentId,
-        );
-        const exceptions = await this.scheduleRepository.listExceptionsForDate({
-            staffProfileId: params.staffProfileId,
-            departmentId: service.departmentId,
-            date,
-        });
-        const windows = buildAvailabilityWindows(
-            schedulesForServiceDepartment,
-            exceptions,
-            date,
-        );
-        const hasAnySavedSchedule = weeklySchedules.some((schedule) =>
-            this.isUsableSavedSchedule(schedule),
-        );
-        const availabilityWindows =
-            windows.length > 0 || hasAnySavedSchedule
-                ? windows
-                : this.buildDefaultAvailabilityWindows(exceptions);
+        const availabilityWindows = this.buildDefaultAvailabilityWindows(date);
 
         if (availabilityWindows.length === 0) {
             return [];
@@ -523,7 +434,7 @@ export class ScheduleService {
             date: params.date,
             windows: availabilityWindows,
             serviceDurationMinutes: DEFAULT_SCHEDULE_SLOT_DURATION_MINUTES,
-            unavailableExceptions: exceptions,
+            unavailableExceptions: [],
             bookedAppointments: [],
             lockedSlots: [],
         });

@@ -249,7 +249,7 @@ describe('Staff routes', () => {
             .mockResolvedValue([]);
 
         const response = await request(app)
-            .get(`/api/staff/doctors/${staffProfile.id}/available-slots?date=2026-06-03`);
+            .get(`/api/staff/doctors/${staffProfile.id}/available-slots?date=2030-06-05`);
 
         expect(response.status).toBe(200);
         expect(response.body.doctorId).toBe(staffProfile.id);
@@ -287,7 +287,7 @@ describe('Staff routes', () => {
             .mockResolvedValue([]);
 
         const response = await request(app)
-            .get(`/api/staff/doctors/${staffProfile.id}/available-slots?date=2026-06-03`);
+            .get(`/api/staff/doctors/${staffProfile.id}/available-slots?date=2030-06-05`);
 
         expect(response.status).toBe(200);
         expect(response.body.doctorId).toBe(staffProfile.id);

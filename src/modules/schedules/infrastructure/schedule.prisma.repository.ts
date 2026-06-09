@@ -17,6 +17,13 @@ import {
 type StaffScheduleRecord = Prisma.StaffScheduleGetPayload<Record<string, never>>;
 type ScheduleExceptionRecord = Prisma.ScheduleExceptionGetPayload<Record<string, never>>;
 
+const activeAppointmentStatuses = [
+    AppointmentStatus.SCHEDULED,
+    AppointmentStatus.CONFIRMED,
+    AppointmentStatus.CHECKED_IN,
+    AppointmentStatus.IN_PROGRESS,
+];
+
 function toScheduleEntity(schedule: StaffScheduleRecord): StaffScheduleEntity {
     return {
         id: schedule.id,
@@ -246,7 +253,7 @@ export class SchedulePrismaRepository implements ScheduleRepository {
                     gt: filters.start,
                 },
                 status: {
-                    in: [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED],
+                    in: activeAppointmentStatuses,
                 },
             },
             select: {

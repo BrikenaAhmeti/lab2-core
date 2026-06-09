@@ -136,6 +136,41 @@ function toAppointmentView(appointment: AppointmentRecord): AppointmentView {
     };
 }
 
+const DEFAULT_BOOKING_SERVICE_NAME = 'General Consultation';
+const DEFAULT_BOOKING_SERVICE_DURATION_MINUTES = 30;
+
+const activeAppointmentStatuses = [
+    AppointmentStatus.SCHEDULED,
+    AppointmentStatus.CONFIRMED,
+    AppointmentStatus.CHECKED_IN,
+    AppointmentStatus.IN_PROGRESS,
+];
+
+const appointmentServiceSelect = {
+    id: true,
+    departmentId: true,
+    name: true,
+    defaultDurationMinutes: true,
+    defaultPrice: true,
+    isActive: true,
+    department: {
+        select: {
+            id: true,
+            name: true,
+            isActive: true,
+        },
+    },
+} satisfies Prisma.ServiceCatalogSelect;
+
+function toAppointmentServiceSummary(
+    service: Prisma.ServiceCatalogGetPayload<{ select: typeof appointmentServiceSelect }>,
+): AppointmentServiceSummary {
+    return {
+        ...service,
+        defaultPrice: decimalToNumber(service.defaultPrice),
+    };
+}
+
 function buildListWhere(filters: ListAppointmentsFilters) {
     const where: Prisma.AppointmentWhereInput = {};
 
@@ -278,29 +313,10 @@ export class AppointmentPrismaRepository implements AppointmentRepository {
     async findServiceById(id: string): Promise<AppointmentServiceSummary | null> {
         const service = await prisma.serviceCatalog.findUnique({
             where: { id },
-            select: {
-                id: true,
-                departmentId: true,
-                name: true,
-                defaultDurationMinutes: true,
-                defaultPrice: true,
-                isActive: true,
-                department: {
-                    select: {
-                        id: true,
-                        name: true,
-                        isActive: true,
-                    },
-                },
-            },
+            select: appointmentServiceSelect,
         });
 
-        return service
-            ? {
-                ...service,
-                defaultPrice: decimalToNumber(service.defaultPrice),
-            }
-            : null;
+        return service ? toAppointmentServiceSummary(service) : null;
     }
 
     async findDefaultServiceForStaff(staffProfileId: string): Promise<AppointmentServiceSummary | null> {
@@ -310,11 +326,6 @@ export class AppointmentPrismaRepository implements AppointmentRepository {
                 unassignedAt: null,
                 department: {
                     isActive: true,
-                    services: {
-                        some: {
-                            isActive: true,
-                        },
-                    },
                 },
             },
             orderBy: [{ isPrimary: 'desc' }, { assignedAt: 'asc' }],
@@ -336,29 +347,38 @@ export class AppointmentPrismaRepository implements AppointmentRepository {
                 },
             },
             orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-            select: {
-                id: true,
-                departmentId: true,
-                name: true,
-                defaultDurationMinutes: true,
-                defaultPrice: true,
-                isActive: true,
-                department: {
-                    select: {
-                        id: true,
-                        name: true,
-                        isActive: true,
-                    },
-                },
-            },
+            select: appointmentServiceSelect,
         });
 
-        return service
-            ? {
-                ...service,
-                defaultPrice: decimalToNumber(service.defaultPrice),
-            }
-            : null;
+        if (service) {
+            return toAppointmentServiceSummary(service);
+        }
+
+        const defaultService = await prisma.serviceCatalog.upsert({
+            where: {
+                departmentId_name: {
+                    departmentId: assignment.departmentId,
+                    name: DEFAULT_BOOKING_SERVICE_NAME,
+                },
+            },
+            update: {
+                isActive: true,
+                defaultDurationMinutes: DEFAULT_BOOKING_SERVICE_DURATION_MINUTES,
+                defaultPrice: 0,
+            },
+            create: {
+                departmentId: assignment.departmentId,
+                name: DEFAULT_BOOKING_SERVICE_NAME,
+                description: 'Default service used for mobile doctor booking.',
+                defaultDurationMinutes: DEFAULT_BOOKING_SERVICE_DURATION_MINUTES,
+                defaultPrice: 0,
+                isActive: true,
+                sortOrder: 999,
+            },
+            select: appointmentServiceSelect,
+        });
+
+        return toAppointmentServiceSummary(defaultService);
     }
 
     async findStaffById(id: string): Promise<AppointmentStaffAvailabilitySummary | null> {
@@ -454,7 +474,7 @@ export class AppointmentPrismaRepository implements AppointmentRepository {
                     gt: filters.scheduledAt,
                 },
                 status: {
-                    in: [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED],
+                    in: activeAppointmentStatuses,
                 },
             },
         });

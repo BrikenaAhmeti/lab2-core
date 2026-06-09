@@ -11,6 +11,9 @@ const { createApp } = require('../../src/app');
 const {
     PatientPrismaRepository,
 } = require('../../src/modules/patients/infrastructure/patient.prisma.repository');
+const {
+    HttpAuthUserProfilesClient,
+} = require('../../src/shared/auth/auth-user-profiles.client');
 
 const patient = {
     id: '6d8ad35f-76cc-4cf7-bc12-065ac46a3f7f',
@@ -405,5 +408,51 @@ describe('Patient routes', () => {
 
         expect(response.status).toBe(401);
         expect(response.body.message).toBe('Unauthorized');
+    });
+
+    it('relinks an orphaned patient profile when the old auth user no longer exists', async () => {
+        const oldUserId = 'd727a9bb-0b16-4e66-8b6c-47105edf9ba4';
+        const newUserId = '15e1a6c6-998a-4d47-a1de-a55859e958cc';
+        jest.spyOn(PatientPrismaRepository.prototype, 'findByUserId').mockResolvedValue(
+            null,
+        );
+        jest.spyOn(
+            PatientPrismaRepository.prototype,
+            'findByPersonalNumberHash',
+        ).mockResolvedValue({
+            ...patient,
+            userId: oldUserId,
+        });
+        jest.spyOn(PatientPrismaRepository.prototype, 'findByEmail').mockResolvedValue(
+            null,
+        );
+        jest.spyOn(HttpAuthUserProfilesClient.prototype, 'getProfiles').mockResolvedValue(
+            [],
+        );
+        const updateSpy = jest
+            .spyOn(PatientPrismaRepository.prototype, 'update')
+            .mockResolvedValue({
+                ...patient,
+                userId: newUserId,
+            });
+
+        const response = await request(app)
+            .post('/internal/patients/link-by-personal-number')
+            .set('x-internal-api-key', process.env.INTERNAL_API_KEY as string)
+            .send({
+                userId: newUserId,
+                personalNumber: '1234567890',
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({
+            linked: true,
+            patientId: patient.id,
+            userId: newUserId,
+        });
+        expect(updateSpy).toHaveBeenCalledWith(patient.id, {
+            userId: newUserId,
+            actorUserId: newUserId,
+        });
     });
 });

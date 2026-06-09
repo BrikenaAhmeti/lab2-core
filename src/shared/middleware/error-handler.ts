@@ -24,7 +24,11 @@ export function errorHandler(
 
     logger.error('unhandled_error', {
         requestId: req.requestId,
-        error,
+        error: {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+        },
     });
     captureError(error, {
         requestId: req.requestId,

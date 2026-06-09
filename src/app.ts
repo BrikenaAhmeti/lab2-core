@@ -34,7 +34,6 @@ import { auditLogRoutes } from './modules/audit-logs/presentation/audit-log.rout
 import {
     appointmentRoutes,
     internalAppointmentRoutes,
-    publicAppointmentRoutes,
 } from './modules/appointments/presentation/appointment.routes';
 import { medicalRecordRoutes } from './modules/medical-records/presentation/medical-record.routes';
 import { prescriptionRoutes } from './modules/prescriptions/presentation/prescription.routes';
@@ -136,7 +135,6 @@ export function createApp() {
     app.use('/api/public/departments', publicDepartmentRoutes);
     app.use('/api/public/services', publicServiceCatalogRoutes);
     app.use('/api/public/staff', publicStaffRoutes);
-    app.use('/api/public/appointments', publicAppointmentRoutes);
     app.use('/api/public/settings', publicSettingRoutes);
     app.use('/api/patients', patientRoutes);
     app.use('/api/appointments', appointmentRoutes);

@@ -1,5 +1,6 @@
 import { BloodType } from '../../../generated/prisma';
 import type { AuthAccountProvisioningClient } from '../../../shared/auth/auth-account-provisioning.client';
+import type { AuthUserProfilesClient } from '../../../shared/auth/auth-user-profiles.client';
 import { AppError } from '../../../shared/core/errors/app-error';
 import {
     decryptPersonalNumber,
@@ -29,6 +30,7 @@ export class PatientService {
     constructor(
         private readonly patientRepository: PatientRepository,
         private readonly authAccountProvisioningClient?: AuthAccountProvisioningClient,
+        private readonly authUserProfilesClient?: AuthUserProfilesClient,
     ) {}
 
     async createPatient(data: CreatePatientData) {
@@ -518,6 +520,36 @@ export class PatientService {
             existingPersonalNumberPatient.userId &&
             existingPersonalNumberPatient.userId !== userId
         ) {
+            const existingAuthUserStillExists = await this.authUserExists(
+                existingPersonalNumberPatient.userId,
+            );
+
+            if (!existingAuthUserStillExists) {
+                const relinkedPatient = await this.patientRepository.update(
+                    existingPersonalNumberPatient.id,
+                    {
+                        userId,
+                        ...(!existingPersonalNumberPatient.email && email ? { email } : {}),
+                        ...(!existingPersonalNumberPatient.phone && profile?.phone
+                            ? { phone: normalizeOptionalText(profile.phone) }
+                            : {}),
+                        ...(!existingPersonalNumberPatient.dateOfBirth && profile?.dateOfBirth
+                            ? { dateOfBirth: profile.dateOfBirth }
+                            : {}),
+                        ...(!existingPersonalNumberPatient.gender && profile?.gender
+                            ? { gender: normalizeOptionalText(profile.gender) }
+                            : {}),
+                        actorUserId: userId,
+                    },
+                );
+
+                return {
+                    linked: true,
+                    patientId: relinkedPatient.id,
+                    userId,
+                };
+            }
+
             throw new AppError(
                 'Patient personal number already linked to another user',
                 409,
@@ -559,6 +591,15 @@ export class PatientService {
 
     decryptPersonalNumber(value: string | null) {
         return decryptPersonalNumber(value);
+    }
+
+    private async authUserExists(userId: string) {
+        if (!this.authUserProfilesClient) {
+            return true;
+        }
+
+        const profiles = await this.authUserProfilesClient.getProfiles([userId]);
+        return profiles.some((profile) => (profile.userId ?? profile.id) === userId);
     }
 
     private async ensureNoDuplicate(

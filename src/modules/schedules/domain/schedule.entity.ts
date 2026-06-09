@@ -83,4 +83,5 @@ export interface AvailableSlotsView {
     serviceId: string;
     date: string;
     slots: AvailableSlotView[];
+    occupiedSlots?: AvailableSlotView[];
 }

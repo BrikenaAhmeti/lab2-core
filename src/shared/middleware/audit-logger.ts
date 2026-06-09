@@ -249,7 +249,7 @@ function inferRouteTarget(
     responseBody: unknown,
     methodAction: MethodAuditAction,
 ): AuditRouteTarget {
-    const { segments, isPublic, isInternal } = pathContext(req.path);
+    const { segments, isInternal } = pathContext(req.path);
     const [root, second, third, fourth] = segments;
     const responseId = inferEntityIdFromBody(responseBody);
 
@@ -360,10 +360,9 @@ function inferRouteTarget(
             }
 
             return {
-                action: isPublic ? 'appointments.public_booked' : 'appointments.booked',
+                action: 'appointments.booked',
                 entity: 'appointments',
                 entityId: responseId ?? second,
-                metadata: { public: isPublic || undefined },
             };
         case 'medical-records':
             if (second && third === 'finalize') {

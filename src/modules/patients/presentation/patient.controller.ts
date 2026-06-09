@@ -4,6 +4,7 @@ import { BloodType } from '../../../generated/prisma';
 import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
 import { HttpAuthAccountProvisioningClient } from '../../../shared/auth/auth-account-provisioning.client';
+import { HttpAuthUserProfilesClient } from '../../../shared/auth/auth-user-profiles.client';
 import { CreatePatientCommand } from '../application/commands/create-patient.command';
 import { LinkPatientByPersonalNumberCommand } from '../application/commands/link-patient-by-personal-number.command';
 import { UpdatePatientCommand } from '../application/commands/update-patient.command';
@@ -124,6 +125,7 @@ export class PatientController {
     private readonly service = new PatientService(
         new PatientPrismaRepository(),
         new HttpAuthAccountProvisioningClient(),
+        new HttpAuthUserProfilesClient(),
     );
     private readonly createPatientHandler = new CreatePatientHandler(this.service);
     private readonly updatePatientHandler = new UpdatePatientHandler(this.service);
@@ -164,6 +166,21 @@ export class PatientController {
             this.createPatientHandler,
             command,
         );
+
+        return res.status(201).json(result);
+    }
+
+    async publicCreate(req: Request, res: Response) {
+        const body = createPatientSchema.parse(req.body);
+        const result = await this.service.findOrCreatePublicPatient({
+            firstName: body.firstName,
+            lastName: body.lastName,
+            email: body.email ?? '',
+            phone: body.phone ?? '',
+            dateOfBirth: body.dateOfBirth ?? new Date('1900-01-01T00:00:00.000Z'),
+            gender: body.gender ?? 'UNKNOWN',
+            personalNumber: body.personalNumber,
+        });
 
         return res.status(201).json(result);
     }

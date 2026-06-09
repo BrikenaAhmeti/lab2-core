@@ -18,6 +18,9 @@ const {
 const {
     PatientPrismaRepository,
 } = require('../../src/modules/patients/infrastructure/patient.prisma.repository');
+const {
+    AppointmentAiClinicalContextService,
+} = require('../../src/modules/appointments/services/appointment-ai-clinical-context.service');
 
 const patientId = '35974dde-783f-43a1-bcab-117d754f81e1';
 const departmentId = '8d1dbd2c-b5c4-4d8f-b75b-e8a2dce8f30e';
@@ -26,6 +29,7 @@ const staffProfileId = '42b2c8e0-4df7-4df1-b951-fb96b0b8cf86';
 const appointmentId = 'e61720ab-6446-4da3-a4bc-f642940e4a81';
 const scheduledAt = new Date('2030-01-02T09:00:00.000Z');
 const endAt = new Date('2030-01-02T09:30:00.000Z');
+const roles = ['Admin'];
 
 const department = {
     id: departmentId,
@@ -348,8 +352,8 @@ describe('Appointment routes', () => {
     });
 
     it('books a default-schedule slot for a mobile doctor with no usable saved schedule', async () => {
-        const mobileScheduledAt = new Date('2026-06-08T12:30:00.000Z');
-        const mobileEndAt = new Date('2026-06-08T13:00:00.000Z');
+        const mobileScheduledAt = new Date('2030-06-03T12:30:00.000Z');
+        const mobileEndAt = new Date('2030-06-03T13:00:00.000Z');
         jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById')
             .mockResolvedValue(patient);
         jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientByUserId')
@@ -471,8 +475,8 @@ describe('Appointment routes', () => {
     });
 
     it('keeps booked doctor slots unavailable globally across different patients', async () => {
-        const mobileScheduledAt = new Date('2026-06-08T12:30:00.000Z');
-        const mobileEndAt = new Date('2026-06-08T13:00:00.000Z');
+        const mobileScheduledAt = new Date('2030-06-03T12:30:00.000Z');
+        const mobileEndAt = new Date('2030-06-03T13:00:00.000Z');
         const bookedAppointments: Array<{ scheduledAt: Date; endAt: Date }> = [];
 
         jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById')
@@ -596,7 +600,7 @@ describe('Appointment routes', () => {
         expect(userABooking.status).toBe(201);
 
         const userBSlots = await request(app)
-            .get(`/api/staff/doctors/${staffProfileId}/available-slots?date=2026-06-08`);
+            .get(`/api/staff/doctors/${staffProfileId}/available-slots?date=2030-06-03`);
 
         expect(userBSlots.status).toBe(200);
         expect(userBSlots.body.slots.map((slot: { startTime: string }) => slot.startTime))
@@ -713,39 +717,9 @@ describe('Appointment routes', () => {
         expect(createSpy).not.toHaveBeenCalled();
     });
 
-    it('books a public appointment without an auth token', async () => {
-        jest.spyOn(PatientPrismaRepository.prototype, 'findByPersonalNumberHash').mockResolvedValue(null);
-        jest.spyOn(PatientPrismaRepository.prototype, 'findByEmail').mockResolvedValue(null);
-        jest.spyOn(PatientPrismaRepository.prototype, 'create').mockResolvedValue(patientProfile);
-        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById').mockResolvedValue(patient);
-        jest.spyOn(AppointmentPrismaRepository.prototype, 'findServiceById').mockResolvedValue({
-            id: serviceId,
-            departmentId,
-            name: 'Initial Consultation',
-            defaultDurationMinutes: 30,
-            defaultPrice: 50,
-            isActive: true,
-            department,
-        });
-        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffById').mockResolvedValue({
-            id: staffProfileId,
-            userId: appointment.staff!.userId,
-            employeeCode: 'DR-001',
-            specialization: 'Cardiologist',
-            employmentStatus: 'ACTIVE',
-            departments: [
-                {
-                    departmentId,
-                    unassignedAt: null,
-                    department,
-                },
-            ],
-        });
-        jest
-            .spyOn(AppointmentPrismaRepository.prototype, 'countConflictingAppointments')
-            .mockResolvedValue(0);
-        jest.spyOn(AppointmentPrismaRepository.prototype, 'create').mockResolvedValue(appointment);
-        mockAvailabilityDependencies();
+    it('does not expose public appointment booking without an auth token', async () => {
+        const patientCreateSpy = jest.spyOn(PatientPrismaRepository.prototype, 'create');
+        const appointmentCreateSpy = jest.spyOn(AppointmentPrismaRepository.prototype, 'create');
 
         const response = await request(app)
             .post('/api/public/appointments')
@@ -765,26 +739,9 @@ describe('Appointment routes', () => {
                 notes: 'Website request',
             });
 
-        expect(response.status).toBe(201);
-        expect(response.body.id).toBe(appointmentId);
-        expect(PatientPrismaRepository.prototype.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-                firstName: 'Ada',
-                lastName: 'Lovelace',
-                email: 'ada@medsphere.local',
-                phone: '+38344111222',
-                personalNumber: expect.stringMatching(/^enc:/),
-                personalNumberHash: expect.any(String),
-            }),
-        );
-        expect(AppointmentPrismaRepository.prototype.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-                patientId,
-                serviceCatalogId: serviceId,
-                staffProfileId,
-                notes: 'Website request',
-            }),
-        );
+        expect(response.status).toBe(404);
+        expect(patientCreateSpy).not.toHaveBeenCalled();
+        expect(appointmentCreateSpy).not.toHaveBeenCalled();
     });
 
     it('returns privacy-safe AI clinical context for an internal appointment lookup', async () => {
@@ -845,39 +802,8 @@ describe('Appointment routes', () => {
         expect(JSON.stringify(response.body)).not.toContain('+38344111222');
     });
 
-    it('books a public appointment without an auth token', async () => {
-        jest.spyOn(PatientPrismaRepository.prototype, 'findByPersonalNumberHash').mockResolvedValue(null);
-        jest.spyOn(PatientPrismaRepository.prototype, 'findByEmail').mockResolvedValue(null);
-        jest.spyOn(PatientPrismaRepository.prototype, 'create').mockResolvedValue(patientProfile);
-        jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById').mockResolvedValue(patient);
-        jest.spyOn(AppointmentPrismaRepository.prototype, 'findServiceById').mockResolvedValue({
-            id: serviceId,
-            departmentId,
-            name: 'Initial Consultation',
-            defaultDurationMinutes: 30,
-            defaultPrice: 50,
-            isActive: true,
-            department,
-        });
-        jest.spyOn(AppointmentPrismaRepository.prototype, 'findStaffById').mockResolvedValue({
-            id: staffProfileId,
-            userId: appointment.staff!.userId,
-            employeeCode: 'DR-001',
-            specialization: 'Cardiologist',
-            employmentStatus: 'ACTIVE',
-            departments: [
-                {
-                    departmentId,
-                    unassignedAt: null,
-                    department,
-                },
-            ],
-        });
-        jest
-            .spyOn(AppointmentPrismaRepository.prototype, 'countConflictingAppointments')
-            .mockResolvedValue(0);
-        jest.spyOn(AppointmentPrismaRepository.prototype, 'create').mockResolvedValue(appointment);
-        mockAvailabilityDependencies();
+    it('rejects public appointment booking after the public flow is removed', async () => {
+        const appointmentCreateSpy = jest.spyOn(AppointmentPrismaRepository.prototype, 'create');
 
         const response = await request(app)
             .post('/api/public/appointments')
@@ -897,26 +823,8 @@ describe('Appointment routes', () => {
                 notes: 'Website request',
             });
 
-        expect(response.status).toBe(201);
-        expect(response.body.id).toBe(appointmentId);
-        expect(PatientPrismaRepository.prototype.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-                firstName: 'Ada',
-                lastName: 'Lovelace',
-                email: 'ada@medsphere.local',
-                phone: '+38344111222',
-                personalNumber: expect.stringMatching(/^enc:/),
-                personalNumberHash: expect.any(String),
-            }),
-        );
-        expect(AppointmentPrismaRepository.prototype.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-                patientId,
-                serviceCatalogId: serviceId,
-                staffProfileId,
-                notes: 'Website request',
-            }),
-        );
+        expect(response.status).toBe(404);
+        expect(appointmentCreateSpy).not.toHaveBeenCalled();
     });
 
     it('lists appointments with filters', async () => {

@@ -10,7 +10,6 @@ const vapiToolsController = new VapiToolsController();
 
 export const appointmentRoutes = Router();
 export const internalAppointmentRoutes = Router();
-export const publicAppointmentRoutes = Router();
 
 internalAppointmentRoutes.get(
     '/reminders',
@@ -23,14 +22,6 @@ internalAppointmentRoutes.get(
         }
     },
 );
-
-publicAppointmentRoutes.post('/', async (req, res, next) => {
-    try {
-        await controller.publicCreate(req, res);
-    } catch (error) {
-        next(error);
-    }
-});
 
 appointmentRoutes.post(
     '/',

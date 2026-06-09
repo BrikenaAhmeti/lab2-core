@@ -103,22 +103,6 @@ describe('auditLog', () => {
         });
     });
 
-    it('marks public appointment bookings distinctly', () => {
-        const details = inferAuditDetails(
-            mockRequest('POST', '/api/public/appointments'),
-            { id: 'appointment-1' },
-        );
-
-        expect(details).toMatchObject({
-            action: 'appointments.public_booked',
-            entity: 'appointments',
-            entityId: 'appointment-1',
-            metadata: {
-                public: true,
-            },
-        });
-    });
-
     it('marks internal patient link actions distinctly', () => {
         const details = inferAuditDetails(
             mockRequest('POST', '/internal/patients/link-by-personal-number', {

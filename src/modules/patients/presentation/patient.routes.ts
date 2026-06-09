@@ -46,12 +46,25 @@ patientRoutes.get(
     },
 );
 
-patientRoutes.post('/', authMiddleware, async (req, res, next) => {
-    try {
-        await controller.create(req, res);
-    } catch (error) {
-        next(error);
+patientRoutes.post('/', async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    const handler = async () => {
+        try {
+            if (req.user) {
+                await controller.create(req, res);
+            } else {
+                await controller.publicCreate(req, res);
+            }
+        } catch (error) {
+            next(error);
+        }
+    };
+
+    if (authHeader?.startsWith('Bearer ')) {
+        return authMiddleware(req, res, handler);
     }
+
+    return handler();
 });
 
 patientRoutes.get('/me', authMiddleware, async (req, res, next) => {

@@ -232,21 +232,34 @@ export class ScheduleService {
             }),
             this.slotLockRepository.findLockedSlots(params),
         ]);
+        const candidateSlots = generateAvailableSlots({
+            date: params.date,
+            windows: availabilityWindows,
+            serviceDurationMinutes: DEFAULT_SCHEDULE_SLOT_DURATION_MINUTES,
+            unavailableExceptions: exceptions,
+            bookedAppointments: [],
+            lockedSlots: [],
+        }).filter((slot) =>
+            isFutureScheduleClockDate(new Date(slot.start), this.nowProvider()),
+        );
+        const availableSlots = generateAvailableSlots({
+            date: params.date,
+            windows: availabilityWindows,
+            serviceDurationMinutes: DEFAULT_SCHEDULE_SLOT_DURATION_MINUTES,
+            unavailableExceptions: exceptions,
+            bookedAppointments,
+            lockedSlots,
+        }).filter((slot) =>
+            isFutureScheduleClockDate(new Date(slot.start), this.nowProvider()),
+        );
+        const availableStarts = new Set(availableSlots.map((slot) => slot.start));
 
         return {
             staffProfileId: params.staffProfileId,
             serviceId: params.serviceId,
             date: params.date,
-            slots: generateAvailableSlots({
-                date: params.date,
-                windows: availabilityWindows,
-                serviceDurationMinutes: DEFAULT_SCHEDULE_SLOT_DURATION_MINUTES,
-                unavailableExceptions: exceptions,
-                bookedAppointments,
-                lockedSlots,
-            }).filter((slot) =>
-                isFutureScheduleClockDate(new Date(slot.start), this.nowProvider()),
-            ),
+            slots: availableSlots,
+            occupiedSlots: candidateSlots.filter((slot) => !availableStarts.has(slot.start)),
         };
     }
 

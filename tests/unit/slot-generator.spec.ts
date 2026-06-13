@@ -77,6 +77,33 @@ describe('slot generation', () => {
         ]);
     });
 
+    it('uses the standard 12:00 to 13:00 break when none is saved', () => {
+        const windows = buildAvailabilityWindows(
+            [
+                {
+                    ...baseSchedule,
+                    startTime: '08:00',
+                    endTime: '17:00',
+                },
+            ],
+            [],
+            new Date(`${date}T00:00:00.000Z`),
+        );
+
+        const slots = generateAvailableSlots({
+            date,
+            windows,
+            serviceDurationMinutes: 30,
+            unavailableExceptions: [],
+            bookedAppointments: [],
+            lockedSlots: [],
+        });
+
+        expect(slots.map((slot) => slot.startTime)).not.toContain('12:00');
+        expect(slots.map((slot) => slot.startTime)).not.toContain('12:30');
+        expect(slots.map((slot) => slot.startTime)).toContain('13:00');
+    });
+
     it('returns no slots for a full-day unavailable exception', () => {
         const windows = buildAvailabilityWindows(
             [baseSchedule],

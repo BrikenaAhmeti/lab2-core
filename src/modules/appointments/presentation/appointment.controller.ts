@@ -137,9 +137,12 @@ const rescheduleAppointmentBodySchema = z.object({
 const patientRescheduleBodySchema = z.object({
     doctorId: z.string().uuid('Invalid doctor id').optional(),
     staffProfileId: z.string().uuid('Invalid staff profile id').optional(),
-    date: dateTimeSchema,
+    date: dateTimeSchema.optional(),
+    scheduledAt: dateTimeSchema.optional(),
 }).refine((body) => body.doctorId || body.staffProfileId, {
     message: 'doctorId or staffProfileId is required',
+}).refine((body) => body.date || body.scheduledAt, {
+    message: 'date or scheduledAt is required',
 });
 
 const statusActionSchema = z.enum([
@@ -185,12 +188,18 @@ function canAccessAppointment(req: Request, appointment: AppointmentView, permis
 
 function toMobileAppointment(appointment: AppointmentView) {
     const doctorName = appointment.staff?.displayName ?? null;
+    const formatClockTime = (value: Date) => [
+        value.getUTCHours().toString().padStart(2, '0'),
+        value.getUTCMinutes().toString().padStart(2, '0'),
+    ].join(':');
 
     return {
         ...appointment,
         _id: appointment.id,
         doctorId: appointment.staffProfileId,
         date: appointment.scheduledAt,
+        startTime: formatClockTime(appointment.scheduledAt),
+        endTime: formatClockTime(appointment.endAt),
         reason: appointment.notes,
         doctor: appointment.staff
             ? {
@@ -491,7 +500,7 @@ export class AppointmentController {
             this.rescheduleAppointmentHandler,
             new RescheduleAppointmentCommand(
                 params.id,
-                body.date,
+                body.scheduledAt ?? body.date!,
                 undefined,
                 staff.id,
                 undefined,

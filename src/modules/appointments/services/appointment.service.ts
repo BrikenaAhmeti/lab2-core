@@ -4,7 +4,6 @@ import { AppError } from '../../../shared/core/errors/app-error';
 import { ScheduleService } from '../../schedules/services/schedule.service';
 import {
     isFutureScheduleClockDate,
-    toScheduleClockDate,
 } from '../../schedules/domain/schedule-time';
 import {
     AppointmentTimeRange,
@@ -397,29 +396,17 @@ export class AppointmentService {
         serviceCatalogId: string;
         scheduledAt: Date;
     }): Promise<AppointmentTimeRange> {
-        const candidates = [
-            normalizeSlotDate(input.scheduledAt),
-            normalizeSlotDate(toScheduleClockDate(input.scheduledAt)),
-        ];
-        const seen = new Set<string>();
+        const scheduledAt = normalizeSlotDate(input.scheduledAt);
+        const range = this.buildAppointmentRange(scheduledAt);
+        const isAvailable = await this.scheduleService.isSlotWithinSchedule({
+            staffProfileId: input.staffProfileId,
+            serviceId: input.serviceCatalogId,
+            scheduledAt: range.scheduledAt,
+            endAt: range.endAt,
+        });
 
-        for (const scheduledAt of candidates) {
-            const key = scheduledAt.toISOString();
-
-            if (seen.has(key)) continue;
-            seen.add(key);
-
-            const range = this.buildAppointmentRange(scheduledAt);
-            const isAvailable = await this.scheduleService.isSlotWithinSchedule({
-                staffProfileId: input.staffProfileId,
-                serviceId: input.serviceCatalogId,
-                scheduledAt: range.scheduledAt,
-                endAt: range.endAt,
-            });
-
-            if (isAvailable) {
-                return range;
-            }
+        if (isAvailable) {
+            return range;
         }
 
         throw new AppError('Appointment slot is not available', 409);

@@ -248,35 +248,25 @@ describe('AppointmentService', () => {
         expect(result.id).toBe(appointmentId);
     });
 
-    it('normalizes mobile local clock appointment times before booking', async () => {
+    it('rejects a submitted time that is not an exact Core schedule slot', async () => {
         const { service, repository, scheduleService } = createService();
-        const mobileLocalInstant = new Date('2030-06-03T10:30:00.000Z');
-        const normalizedScheduledAt = new Date('2030-06-03T12:30:00.000Z');
-        const normalizedEndAt = new Date('2030-06-03T13:00:00.000Z');
+        const submittedTime = new Date('2030-06-03T10:30:00.000Z');
+        scheduleService.isSlotWithinSchedule.mockResolvedValue(false);
 
-        scheduleService.isSlotWithinSchedule
-            .mockResolvedValueOnce(false)
-            .mockResolvedValueOnce(true);
-
-        await service.bookAppointment({
-            patientId,
-            serviceCatalogId: serviceId,
-            staffProfileId,
-            scheduledAt: mobileLocalInstant,
+        await expect(
+            service.bookAppointment({
+                patientId,
+                serviceCatalogId: serviceId,
+                staffProfileId,
+                scheduledAt: submittedTime,
+            }),
+        ).rejects.toMatchObject({
+            message: 'Appointment slot is not available',
+            statusCode: 409,
         });
 
-        expect(scheduleService.isSlotWithinSchedule).toHaveBeenLastCalledWith(
-            expect.objectContaining({
-                scheduledAt: normalizedScheduledAt,
-                endAt: normalizedEndAt,
-            }),
-        );
-        expect(repository.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-                scheduledAt: normalizedScheduledAt,
-                endAt: normalizedEndAt,
-            }),
-        );
+        expect(scheduleService.isSlotWithinSchedule).toHaveBeenCalledTimes(1);
+        expect(repository.create).not.toHaveBeenCalled();
     });
 
     it('rejects a slot that is already Redis-locked', async () => {

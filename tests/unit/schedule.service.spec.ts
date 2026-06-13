@@ -56,6 +56,7 @@ describe('ScheduleService', () => {
                 updatedAt: new Date('2030-01-01T00:00:00.000Z'),
             },
         ]);
+        repository.listWeeklySchedules.mockResolvedValue([]);
         repository.listExceptionsForDate.mockResolvedValue([]);
         repository.listBookedAppointments.mockResolvedValue([]);
         const service = new ScheduleService(
@@ -71,5 +72,34 @@ describe('ScheduleService', () => {
         });
 
         expect(result.slots.map((slot) => slot.startTime)).toEqual(['09:30', '10:00']);
+    });
+
+    it('does not return appointment slots on weekends', async () => {
+        const repository = createRepository();
+        const locks: jest.Mocked<SlotLockRepository> = {
+            findLockedSlots: jest.fn().mockResolvedValue([]),
+        };
+        repository.findStaffById.mockResolvedValue({
+            id: staffProfileId,
+            employmentStatus: 'ACTIVE',
+            departments: [{ departmentId, unassignedAt: null, department: { id: departmentId, isActive: true } }],
+        });
+        repository.findServiceById.mockResolvedValue({
+            id: serviceId,
+            departmentId,
+            defaultDurationMinutes: 30,
+            isActive: true,
+        });
+        const service = new ScheduleService(repository, locks);
+
+        const result = await service.getAvailableSlots({
+            staffProfileId,
+            serviceId,
+            date: '2030-05-18',
+        });
+
+        expect(result.slots).toEqual([]);
+        expect(result.occupiedSlots).toEqual([]);
+        expect(repository.listSchedulesForDay).not.toHaveBeenCalled();
     });
 });

@@ -191,6 +191,7 @@ export class ScheduleController {
     async getAvailableSlots(req: Request, res: Response) {
         const params = idParamsSchema.parse(req.params);
         const query = availableSlotsQuerySchema.parse(req.query);
+        res.set('Cache-Control', 'no-store');
         const result = await this.queryBus.execute(
             this.getAvailableSlotsHandler,
             new GetAvailableSlotsQuery(params.id, query.serviceId, query.date),

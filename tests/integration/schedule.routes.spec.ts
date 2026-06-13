@@ -222,10 +222,13 @@ describe('Schedule routes', () => {
             .set('Authorization', `Bearer ${createAccessToken(['staff:read'])}`);
 
         expect(response.status).toBe(200);
+        expect(response.headers['cache-control']).toBe('no-store');
         expect(response.body.slots.map((slot: { startTime: string }) => slot.startTime)).toEqual([
             '09:00',
             '10:30',
         ]);
+        expect(response.body.occupiedSlots.map((slot: { startTime: string }) => slot.startTime))
+            .toEqual(['09:30']);
     });
 
     it('returns default slots when a bookable doctor has no saved schedule', async () => {
@@ -251,14 +254,14 @@ describe('Schedule routes', () => {
             .spyOn(SchedulePrismaRepository.prototype, 'listBookedAppointments')
             .mockResolvedValue([
                 {
-                    scheduledAt: new Date('2026-05-18T08:30:00.000Z'),
-                    endAt: new Date('2026-05-18T09:00:00.000Z'),
+                    scheduledAt: new Date('2030-05-20T08:30:00.000Z'),
+                    endAt: new Date('2030-05-20T09:00:00.000Z'),
                 },
             ]);
 
         const response = await request(app)
             .get(
-                `/api/staff/${staffProfileId}/available-slots?date=2026-05-18&serviceId=${serviceId}`,
+                `/api/staff/${staffProfileId}/available-slots?date=2030-05-20&serviceId=${serviceId}`,
             )
             .set('Authorization', `Bearer ${createAccessToken(['staff:read'])}`);
 

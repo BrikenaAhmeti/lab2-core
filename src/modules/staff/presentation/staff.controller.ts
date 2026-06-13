@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { EmploymentStatus } from '../../../generated/prisma';
+import { HttpAuthAccountProvisioningClient } from '../../../shared/auth/auth-account-provisioning.client';
+import { HttpAuthUserProfilesClient } from '../../../shared/auth/auth-user-profiles.client';
 import { CommandBus } from '../../../shared/core/buses/command-bus';
 import { QueryBus } from '../../../shared/core/buses/query-bus';
 import { AppointmentPrismaRepository } from '../../appointments/infrastructure/appointment.prisma.repository';
@@ -197,7 +199,11 @@ export class StaffController {
         new SchedulePrismaRepository(),
         createAppointmentSlotLockRepository(),
     );
-    private readonly service = new StaffService(new StaffPrismaRepository());
+    private readonly service = new StaffService(
+        new StaffPrismaRepository(),
+        new HttpAuthAccountProvisioningClient(),
+        new HttpAuthUserProfilesClient(),
+    );
     private readonly createStaffProfileHandler = new CreateStaffProfileHandler(
         this.service,
     );
@@ -304,9 +310,15 @@ export class StaffController {
         });
     }
 
+    async me(req: Request, res: Response) {
+        const result = await this.service.getStaffProfileByUserId(req.user!.id);
+        return res.status(200).json(result);
+    }
+
     async getDoctorAvailableSlots(req: Request, res: Response) {
         const params = doctorIdParamsSchema.parse(req.params);
         const query = doctorAvailableSlotsQuerySchema.parse(req.query);
+        res.set('Cache-Control', 'no-store');
         const service = await this.appointmentRepository.findDefaultServiceForStaff(
             params.doctorId,
         );

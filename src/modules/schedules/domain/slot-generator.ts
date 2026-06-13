@@ -14,6 +14,9 @@ export interface AvailabilityWindow {
     slotDurationMinutes: number;
 }
 
+const DEFAULT_BREAK_START_MINUTES = 12 * 60;
+const DEFAULT_BREAK_END_MINUTES = 13 * 60;
+
 export const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 export function parseTimeToMinutes(time: string) {
@@ -113,17 +116,27 @@ export function buildAvailabilityWindows(
         }));
     }
 
-    return schedules.filter((schedule) => scheduleIsValidForDate(schedule, date)).map((schedule) => ({
-        startMinutes: parseTimeToMinutes(schedule.startTime)!,
-        endMinutes: parseTimeToMinutes(schedule.endTime)!,
-        breakStartMinutes: schedule.breakStart
-            ? parseTimeToMinutes(schedule.breakStart) ?? undefined
-            : undefined,
-        breakEndMinutes: schedule.breakEnd
-            ? parseTimeToMinutes(schedule.breakEnd) ?? undefined
-            : undefined,
-        slotDurationMinutes: schedule.slotDurationMinutes,
-    }));
+    return schedules.filter((schedule) => scheduleIsValidForDate(schedule, date)).map((schedule) => {
+        const startMinutes = parseTimeToMinutes(schedule.startTime)!;
+        const endMinutes = parseTimeToMinutes(schedule.endTime)!;
+        const usesDefaultBreak = !schedule.breakStart && !schedule.breakEnd;
+
+        return {
+            startMinutes,
+            endMinutes,
+            breakStartMinutes: schedule.breakStart
+                ? parseTimeToMinutes(schedule.breakStart) ?? undefined
+                : usesDefaultBreak && startMinutes < DEFAULT_BREAK_END_MINUTES
+                    ? DEFAULT_BREAK_START_MINUTES
+                    : undefined,
+            breakEndMinutes: schedule.breakEnd
+                ? parseTimeToMinutes(schedule.breakEnd) ?? undefined
+                : usesDefaultBreak && endMinutes > DEFAULT_BREAK_START_MINUTES
+                    ? DEFAULT_BREAK_END_MINUTES
+                    : undefined,
+            slotDurationMinutes: schedule.slotDurationMinutes,
+        };
+    });
 }
 
 export function generateAvailableSlots(params: {

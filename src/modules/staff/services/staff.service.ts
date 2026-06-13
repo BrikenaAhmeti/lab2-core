@@ -204,6 +204,16 @@ export class StaffService {
         return this.enrichStaffProfile(staffProfile);
     }
 
+    async getStaffProfileByUserId(userId: string) {
+        const staffProfile = await this.staffRepository.findByUserId(userId);
+
+        if (!staffProfile) {
+            throw new AppError('Staff profile not found', 404);
+        }
+
+        return this.getStaffProfileById(staffProfile.id);
+    }
+
     async listStaffProfiles(filters: {
         page: number;
         limit: number;

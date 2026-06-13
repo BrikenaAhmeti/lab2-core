@@ -46,6 +46,14 @@ staffRoutes.get('/doctors/:doctorId/available-slots', async (req, res, next) => 
     }
 });
 
+staffRoutes.get('/me', authMiddleware, async (req, res, next) => {
+    try {
+        await controller.me(req, res);
+    } catch (error) {
+        next(error);
+    }
+});
+
 staffRoutes.get(
     '/',
     authMiddleware,

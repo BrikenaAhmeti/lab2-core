@@ -105,6 +105,27 @@ describe('Staff routes', () => {
         jest.restoreAllMocks();
     });
 
+    it('returns the authenticated staff profile through GET /api/staff/me', async () => {
+        jest.spyOn(StaffPrismaRepository.prototype, 'findByUserId').mockResolvedValue(
+            staffProfile,
+        );
+        jest.spyOn(StaffPrismaRepository.prototype, 'findById').mockResolvedValue(
+            staffProfile,
+        );
+
+        const response = await request(app)
+            .get('/api/staff/me')
+            .set('Authorization', `Bearer ${createAccessToken([])}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual(expect.objectContaining({
+            id: staffProfile.id,
+            userId: staffProfile.userId,
+            specialization: 'Cardiology',
+        }));
+        expect(response.body.departments[0].department.name).toBe('Cardiology');
+    });
+
     it('creates a staff profile successfully', async () => {
         jest.spyOn(StaffPrismaRepository.prototype, 'findPositionTypeById').mockResolvedValue(
             positionType,

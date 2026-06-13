@@ -352,8 +352,8 @@ describe('Appointment routes', () => {
     });
 
     it('books a default-schedule slot for a mobile doctor with no usable saved schedule', async () => {
-        const mobileScheduledAt = new Date('2030-06-03T12:30:00.000Z');
-        const mobileEndAt = new Date('2030-06-03T13:00:00.000Z');
+        const mobileScheduledAt = new Date('2030-06-03T13:30:00.000Z');
+        const mobileEndAt = new Date('2030-06-03T14:00:00.000Z');
         jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById')
             .mockResolvedValue(patient);
         jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientByUserId')
@@ -475,8 +475,8 @@ describe('Appointment routes', () => {
     });
 
     it('keeps booked doctor slots unavailable globally across different patients', async () => {
-        const mobileScheduledAt = new Date('2030-06-03T12:30:00.000Z');
-        const mobileEndAt = new Date('2030-06-03T13:00:00.000Z');
+        const mobileScheduledAt = new Date('2030-06-03T13:30:00.000Z');
+        const mobileEndAt = new Date('2030-06-03T14:00:00.000Z');
         const bookedAppointments: Array<{ scheduledAt: Date; endAt: Date }> = [];
 
         jest.spyOn(AppointmentPrismaRepository.prototype, 'findPatientById')
@@ -603,9 +603,12 @@ describe('Appointment routes', () => {
             .get(`/api/staff/doctors/${staffProfileId}/available-slots?date=2030-06-03`);
 
         expect(userBSlots.status).toBe(200);
+        expect(userBSlots.headers['cache-control']).toBe('no-store');
         expect(userBSlots.body.slots.map((slot: { startTime: string }) => slot.startTime))
             .not
-            .toContain('12:30');
+            .toContain('13:30');
+        expect(userBSlots.body.occupiedSlots.map((slot: { startTime: string }) => slot.startTime))
+            .toContain('13:30');
 
         const userBBooking = await request(app)
             .post('/api/appointments')
@@ -908,6 +911,7 @@ describe('Appointment routes', () => {
         expect(response.status).toBe(200);
         expect(response.body.items).toHaveLength(1);
         expect(response.body.items[0].doctorId).toBe(staffProfileId);
+        expect(response.body.items[0].startTime).toBe('09:00');
         expect(response.body.items[0].doctor).toEqual(expect.objectContaining({
             id: staffProfileId,
             specialty: 'Cardiologist',
@@ -947,6 +951,7 @@ describe('Appointment routes', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.items).toHaveLength(1);
+        expect(response.body.items[0].startTime).toBe('09:00');
         expect(listSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 staffId: staffProfileId,

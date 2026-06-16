@@ -70,13 +70,33 @@ export class NotificationAppointmentEventPublisher implements AppointmentEventPu
         }
 
         if (type === 'AppointmentCancelled') {
-            return this.forPatientAndStaff(appointment, {
+            const input = {
                 type: 'appointment.cancelled',
                 patientTitle: 'Appointment cancelled',
                 staffTitle: 'Appointment cancelled',
                 message: `Appointment cancelled: ${appointmentLabel(appointment)}.`,
-                channels: ['in_app', 'email'],
-            });
+                channels: ['in_app', 'email'] as SendNotificationPayload['channels'],
+            };
+
+            if (payload.actorUserId && appointment.patient.userId === payload.actorUserId) {
+                return this.forStaff(appointment, {
+                    type: input.type,
+                    title: input.staffTitle,
+                    message: input.message,
+                    channels: input.channels,
+                });
+            }
+
+            if (payload.actorUserId && appointment.staff?.userId === payload.actorUserId) {
+                return this.forPatient(appointment, {
+                    type: input.type,
+                    title: input.patientTitle,
+                    message: input.message,
+                    channels: input.channels,
+                });
+            }
+
+            return this.forPatientAndStaff(appointment, input);
         }
 
         if (type === 'AppointmentStatusChanged' && appointment.status === 'CONFIRMED') {
